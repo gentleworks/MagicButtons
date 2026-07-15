@@ -4,6 +4,17 @@
         <title>MagicButtons</title>
         <item>
             <title>1.1.0</title>
+            <pubDate>Wed, 15 Jul 2026 14:00:27 -0700</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons-1.1.0-3.dmg" length="2755047" type="application/octet-stream" sparkle:edSignature="arTGPwRrsWmvxfvoq1Z+KcRsuLmP91ckJeTlV7w0NvXukTuIWNA3cvspzgQTvi22qVNX6X5t43Ar0NetqawuAg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons3-2.delta" sparkle:deltaFrom="2" length="19334" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="MLDT/dMhKERnSjmFWpSuJD3TT1aoRK+S0EnhcXPqB1VVm4+Mksdt/FPfY97V6UxsJ7taJHUdEKdr47oJ1XaLDA=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>1.1.0</title>
             <pubDate>Wed, 15 Jul 2026 12:20:08 -0700</pubDate>
             <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
