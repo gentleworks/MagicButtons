@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>MagicButtons</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Wed, 15 Jul 2026 12:20:08 -0700</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons-1.1.0-2.dmg" length="2714177" type="application/octet-stream" sparkle:edSignature="76EwxXKba3YS8tJoU6ls90ZviGZxy16zrEv9S6GcEBeODRvjAZ7f41mZtnALy7ls1qT26mV+LY5A+FEIqrAjAA=="/>
+        </item>
+    </channel>
+</rss>
