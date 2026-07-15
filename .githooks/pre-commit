@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+#
+# Betterleaks secret-scanning pre-commit hook.
+# Blocks a commit if a secret is detected in the staged changes.
+#
+# Enable in a fresh clone:   git config core.hooksPath .githooks
+# Bypass once (discouraged):  git commit --no-verify
+#
+set -eu
+
+if ! command -v betterleaks >/dev/null 2>&1; then
+	printf 'warning: betterleaks not installed — skipping secret scan.\n' >&2
+	printf '         install it to enable this safeguard:  brew install betterleaks\n' >&2
+	exit 0
+fi
+
+# --staged: scan only what is about to be committed.
+# --redact: never print the secret itself to the terminal.
+# Non-zero exit (a leak) aborts the commit via `set -e`.
+betterleaks git --staged --redact --no-banner

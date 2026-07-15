@@ -1,0 +1,95 @@
+# XcodeGen spec for the thin Xcode app target (docs/12 §Packaging). This file is the
+# committed source of truth; the generated MagicButtons.xcodeproj is gitignored and
+# rebuilt with `xcodegen generate` (see README "Building from source"). Everything
+# pure/testable stays in the SwiftPM package (Package.swift); this target owns only the
+# app-bundle concerns SwiftPM can't express: Info.plist / LSUIElement, entitlements,
+# Hardened Runtime, code signing.
+name: MagicButtons
+
+options:
+  bundleIdPrefix: com.gentleworks
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+# The whole repo is a local SwiftPM package; the app links its library products.
+# Sparkle is added ONLY here (the app target), never in Package.swift — the pure,
+# hardware-free SwiftPM library/test targets stay Sparkle-free (docs/14 §Sparkle).
+packages:
+  MagicButtonsPackage:
+    path: .
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
+
+settings:
+  base:
+    # NOTE: no signing settings here on purpose. project.yml settings override xcconfig
+    # (xcconfig is the lowest precedence), so all signing lives in AppShell/Signing.xcconfig
+    # (committed ad-hoc default) + AppShell/Signing.local.xcconfig (optional local override)
+    # — otherwise a local override could never take effect. See Signing.xcconfig.
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  MagicButtons:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    # Base xcconfig with an optional #include? of a gitignored local override, so a
+    # developer's DEVELOPMENT_TEAM persists across regeneration (see Signing.xcconfig).
+    configFiles:
+      Debug: AppShell/Signing.xcconfig
+      Release: AppShell/Signing.xcconfig
+    sources:
+      - path: AppShell
+        # Signing xcconfigs are wired via configFiles above, not compiled/bundled;
+        # keep them (and the template) out of the target's build phases.
+        excludes:
+          - "Signing.xcconfig"
+          - "Signing.local.xcconfig"
+          - "Signing.local.xcconfig.example"
+    dependencies:
+      - package: MagicButtonsPackage
+        product: AppCore
+      - package: MagicButtonsPackage
+        product: GestureEngine
+      - package: MagicButtonsPackage
+        product: Visualizer
+      - package: MagicButtonsPackage
+        product: MultitouchAdapter
+      - package: MagicButtonsPackage
+        product: EventOutput
+      - package: MagicButtonsPackage
+        product: TouchKit
+      # In-app auto-updater (docs/07 §Distribution, docs/14 §Sparkle). App-target only;
+      # Xcode embeds + signs Sparkle.framework (and its helpers) into Contents/Frameworks.
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      base:
+        PRODUCT_NAME: MagicButtons
+        PRODUCT_BUNDLE_IDENTIFIER: com.gentleworks.MagicButtons
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "3"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: AppShell/Info.plist
+        # Liquid Glass app icon authored in Icon Composer (AppShell/magicbuttons.icon).
+        # actool compiles the .icon at build time; name is the file's base name.
+        ASSETCATALOG_COMPILER_APPICON_NAME: magicbuttons
+        CODE_SIGN_ENTITLEMENTS: AppShell/MagicButtons.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        # LSUIElement lives in the Info.plist; no Dock icon, no default window.
+
+schemes:
+  MagicButtons:
+    build:
+      targets:
+        MagicButtons: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release

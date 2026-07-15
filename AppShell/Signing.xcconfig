@@ -1,0 +1,20 @@
+// MagicButtons — signing base config (committed).
+//
+// All signing settings live in this xcconfig chain (nothing in project.yml, which
+// would otherwise override it — xcconfig is the lowest precedence). This file is the
+// lowest layer; the optional local override at the bottom wins over it.
+//
+// Default: ad-hoc "Sign to Run Locally" — a fresh clone builds and runs with NO Apple
+// ID account, certificate, or provisioning profile. (TCC grants re-prompt across
+// rebuilds because an ad-hoc identity isn't stable; fine for a first run.)
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+CODE_SIGNING_REQUIRED = YES
+CODE_SIGNING_ALLOWED = YES
+
+// Optional local override — pin a real team + your Apple Development cert for a stable
+// identity (so TCC grants persist across rebuilds). Copy
+// Signing.local.xcconfig.example → Signing.local.xcconfig and fill it in. Included
+// LAST so its assignments override the ad-hoc defaults above. Path is relative to this
+// file's directory (AppShell/).
+#include? "Signing.local.xcconfig"

@@ -1,0 +1,24 @@
+// Local signing override — TEMPLATE.
+//
+// Copy this file to `Signing.local.xcconfig` (that name is gitignored via
+// `*.local.xcconfig`, so it is never committed) and set your certificate hash below.
+// It's pulled in by AppShell/Signing.xcconfig's optional `#include?`, so it survives
+// `xcodegen generate`.
+//
+// WHY THIS SHAPE: signing Manually against a specific Apple Development certificate —
+// by its SHA-1 hash, with NO DEVELOPMENT_TEAM — produces a real, stable signature with
+// Hardened Runtime and needs NO Apple ID account or provisioning profile. That keeps
+// TCC grants (Input Monitoring / Accessibility) across rebuilds instead of re-prompting.
+//
+// Do NOT set DEVELOPMENT_TEAM here: with a team, Xcode demands a provisioning profile
+// and fails ("No signing certificate 'Mac Development' found …") unless you've added
+// your Apple ID in Xcode → Settings → Accounts. The hash form sidesteps all of that.
+//
+// Find your cert's hash:
+//     security find-identity -p codesigning -v
+//       1) 1B2C3D…(40 hex)… "Apple Development: Your Name (TEAMID)"   <- copy this hash
+// Pick the "Apple Development" line, not "Developer ID Application". No such cert? Create
+// one in Xcode → Settings → Accounts → Manage Certificates → +. Update the hash when the
+// cert renews (~yearly). After editing this file just rebuild — no `xcodegen generate`.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = REPLACE_WITH_YOUR_CERT_SHA1_HASH

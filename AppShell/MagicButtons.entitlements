@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  MagicButtons runs UNSANDBOXED (docs/07 §Distribution): the App Sandbox is
+	  incompatible with reading the multitouch device stream and posting global
+	  CGEvents. Hardened Runtime is enabled via the build setting
+	  (ENABLE_HARDENED_RUNTIME) and needs no exceptions — dlopen of the Apple-signed
+	  private MultitouchSupport framework is permitted under library validation, so
+	  no com.apple.security.cs.disable-library-validation (docs/07 §Signing).
+	  Kept as an explicit file so distribution-signing (Phase 9) has a home.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+</dict>
+</plist>

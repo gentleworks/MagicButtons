@@ -1,0 +1,4 @@
+module MTPrivate {
+    header "MTPrivate.h"
+    export *
+}
