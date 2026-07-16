@@ -178,6 +178,23 @@ import TouchKit
         #expect(stops == [.sizeLimit])
     }
 
+    /// The Status pane states this as a clock time, so it has to be the instant the cap
+    /// actually fires — and it must not linger once recording ends.
+    @Test func theAutoStopDeadlineIsTheStartPlusTheTimeCap() {
+        let h = Harness(); defer { h.cleanUp() }
+        let session = h.session(.init(maxDuration: 60))
+        #expect(session.autoStopAt == nil)
+
+        session.start(layout: ZoneLayout())
+        #expect(session.autoStopAt == h.clock.addingTimeInterval(60))
+
+        // The cap fires exactly there, not a tick later.
+        h.clock = session.autoStopAt!
+        session.checkLimits()
+        #expect(session.lastStopReason == .timeLimit)
+        #expect(session.autoStopAt == nil)
+    }
+
     @Test func hittingTheTimeCapStopsTheSession() {
         let h = Harness(); defer { h.cleanUp() }
         let session = h.session(.init(maxDuration: 60))

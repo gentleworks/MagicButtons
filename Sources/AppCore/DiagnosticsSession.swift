@@ -90,6 +90,13 @@ public final class DiagnosticsSession {
     /// Why the most recent session ended; `nil` while recording or before the first one.
     public private(set) var lastStopReason: DiagnosticsStopReason?
 
+    /// When the time cap will end this session; `nil` when not recording. Derived here
+    /// rather than by the caller so it uses the session's own clock and its own limit —
+    /// the UI can state a time it can't get wrong.
+    public var autoStopAt: Date? {
+        startedAt.map { $0.addingTimeInterval(limits.maxDuration) }
+    }
+
     /// Fires whenever a session actually ends — including a user-initiated `stop()`, so the
     /// caller has **one** teardown path and can't leak a tee by forgetting the auto-stop
     /// case. Not called when `start` fails (nothing was ever wired).

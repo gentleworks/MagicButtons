@@ -82,10 +82,18 @@ struct StatusSettingsView: View {
 
     /// Tracks the toggle, so the instruction is always the *next* step rather than telling
     /// someone to turn on what they already turned on (the `dragStyleHelp` idiom).
+    ///
+    /// Both states name the auto-stop, and *while recording* it becomes a clock time: at
+    /// that point the useful question is "have I got time to reproduce this?", which a
+    /// deadline answers and a duration makes you compute. It's a fixed instant, so stating
+    /// it needs no countdown ticking into the view.
     private var recordingHelp: String {
         if model.isRecordingDiagnostics {
-            return "Recording. Reproduce the problem, then turn this off and attach the log "
-                + "to your bug report."
+            let stops = model.diagnosticsAutoStopAt.map {
+                " Stops on its own at \($0.formatted(date: .omitted, time: .shortened))."
+            } ?? ""
+            return "Recording — reproduce the problem, then turn this off and attach the log "
+                + "to your bug report." + stops
         }
         return "Turn this on, reproduce the problem, then turn it off and attach the log to "
             + "your bug report. Recording stops on its own after "

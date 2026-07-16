@@ -135,6 +135,11 @@ final class AppModel {
     /// The auto-stop cap, in minutes, read from the session rather than written into the
     /// UI copy — so what the Status pane promises can't drift from what's enforced.
     var diagnosticsAutoStopMinutes: Int { Int(diagnostics.limits.maxDuration / 60) }
+    /// When the current recording will stop itself, `nil` when not recording. Mirrored at
+    /// start rather than read live: the deadline is fixed the moment recording begins, so
+    /// stating it as a clock time answers "have I got time to reproduce this?" without a
+    /// per-second countdown republishing into the view.
+    private(set) var diagnosticsAutoStopAt: Date?
 
     private(set) var permissionsSnapshot: PermissionsSnapshot
     /// Set when the user grants Accessibility while the app is already running. We retry
@@ -246,6 +251,7 @@ final class AppModel {
             self.emitter.onEvent = nil
             self.interceptor.onPhysicalButtonEvent = nil
             self.diagnosticsIsRecording = false
+            self.diagnosticsAutoStopAt = nil
             self.diagnosticsLogURL = self.diagnostics.lastFileURL
             self.diagnosticsNote = self.explanation(for: reason)
         }
@@ -442,6 +448,7 @@ final class AppModel {
         }
         diagnosticsIsRecording = true
         diagnosticsLogURL = log.fileURL
+        diagnosticsAutoStopAt = diagnostics.autoStopAt
         diagnosticsNote = nil
     }
 
