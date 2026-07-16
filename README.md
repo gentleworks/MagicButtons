@@ -4,7 +4,7 @@ A macOS (Developer-ID, non–App Store) utility that adds a **middle mouse butto
 and **tap-to-click for left / middle / right** to the Apple Magic Mouse, plus a
 **live visualizer** of finger positions and zones.
 
-Status: **v1 — shipping.** macOS 14+ · Swift 6 · SwiftPM libraries + Xcode app ·
+[**Download the latest release**](https://codeberg.org/anguiano/MagicButtons/releases/latest) · macOS 14+ · Swift 6 · SwiftPM libraries + Xcode app ·
 MIT · open source.
 
 I built this app because I was frustrated that there weren't any other open 

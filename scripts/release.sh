@@ -13,11 +13,15 @@
 #
 # Usage:
 #   scripts/release.sh                 # build → dmg → notarize → staple → signed appcast
-#   scripts/release.sh --publish       # …then push the appcast + DMG to Codeberg Pages
+#   scripts/release.sh --publish       # …then push to Codeberg Pages (Sparkle) + cut a Codeberg Release
+#   scripts/release.sh --publish --notes FILE   # …with release notes read from FILE (markdown)
 #   scripts/release.sh --skip-notarize # build + sign + dmg + appcast only (no Apple round-trip)
 #
-# --publish pushes via a `pages` git worktree (MB_PAGES_WORKTREE, default ../MagicButtons-pages);
-# it cannot be combined with --skip-notarize (never publish an un-notarized build).
+# --publish pushes via a `pages` git worktree (MB_PAGES_WORKTREE, default ../MagicButtons-pages)
+# AND publishes a Codeberg Release (git tag + notes + the SAME notarized DMG) via the Forgejo
+# API, so the binary people download by hand always matches what Sparkle serves. That step needs
+# MB_CODEBERG_TOKEN (repository:write scope); without it it's skipped with a warning (Pages still
+# publishes). --publish cannot be combined with --skip-notarize (never publish un-notarized).
 #
 # Signing identity is NOT baked in — set it per-signer (see below) so the committed
 # script carries no one developer's account details.
@@ -66,14 +70,27 @@ SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
 # Default sits beside the repo so it's outside the main working tree (docs/14 §Sparkle).
 PAGES_WORKTREE="${MB_PAGES_WORKTREE:-$REPO/../MagicButtons-pages}"
 
+# ── Codeberg Releases (human-facing mirror of the Sparkle feed) ──────────────────
+# Codeberg runs Forgejo, whose REST API creates releases and uploads assets — so the
+# hand-download and the auto-updater stay in lockstep with no web-UI clicking. Token
+# is per-signer, kept out of git (release.local.env); repo defaults to the public one.
+CODEBERG_API="https://codeberg.org/api/v1"
+CODEBERG_REPO="${MB_CODEBERG_REPO:-anguiano/MagicButtons}"
+CODEBERG_TOKEN="${MB_CODEBERG_TOKEN:-}"
+
 SKIP_NOTARIZE=0
 PUBLISH=0
-for arg in "$@"; do
-  case "$arg" in
+NOTES_FILE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --skip-notarize) SKIP_NOTARIZE=1 ;;
     --publish)       PUBLISH=1 ;;
-    *) echo "usage: release.sh [--skip-notarize] [--publish]" >&2; exit 2 ;;
+    --notes)         shift; NOTES_FILE="${1:-}"
+                     [[ -n "$NOTES_FILE" ]] || { echo "error: --notes needs a file path" >&2; exit 2; } ;;
+    --notes=*)       NOTES_FILE="${1#--notes=}" ;;
+    *) echo "usage: release.sh [--skip-notarize] [--publish] [--notes FILE]" >&2; exit 2 ;;
   esac
+  shift
 done
 # Publishing an un-notarized build would warn Gatekeeper on every user's Mac — refuse it.
 [[ "$SKIP_NOTARIZE" == 1 && "$PUBLISH" == 1 ]] \
@@ -133,6 +150,71 @@ do_publish() {
   git -C "$PAGES_WORKTREE" commit -q -m "pages: $SCHEME $short (build $build)"
   git -C "$PAGES_WORKTREE" push
   echo "  ✓ published — ${PAGES_URL_PREFIX}appcast.xml"
+}
+
+# Cut a Codeberg Release mirroring what Pages now serves: an annotated git tag on the
+# released source commit, release notes, and the SAME notarized/stapled DMG attached as a
+# hand-download. Uses the Forgejo REST API (Codeberg runs Forgejo — `gh` is GitHub-only).
+# Best-effort: a missing token warns rather than aborting, since Pages is already published.
+do_codeberg_release() {
+  local short build versioned tag name sha body payload release_json id
+  if [[ -z "$CODEBERG_TOKEN" ]]; then
+    printf '\033[33m  ⚠ MB_CODEBERG_TOKEN not set — skipping the Codeberg Release.\033[0m\n' >&2
+    echo   "    Sparkle is published; to mirror the download, create a token (repository:write) at" >&2
+    echo   "    https://codeberg.org/user/settings/applications and set MB_CODEBERG_TOKEN." >&2
+    return
+  fi
+  command -v python3 >/dev/null || die "python3 is needed to build the Codeberg API payload"
+  short="$(plist CFBundleShortVersionString)"; build="$(plist CFBundleVersion)"
+  versioned="$UPDATES/$SCHEME-${short}-${build}.dmg"
+  [[ -f "$versioned" ]] || die "versioned DMG not found for the release: $versioned"
+  tag="v${short}-${build}"
+  name="$SCHEME $short (build $build)"
+  sha="$(git -C "$REPO" rev-parse HEAD)"
+  step "Publishing Codeberg Release $tag"
+
+  # Idempotent: if the release already exists (e.g. a re-run), leave it untouched.
+  if curl -fsS -o /dev/null -H "Authorization: token $CODEBERG_TOKEN" \
+       "$CODEBERG_API/repos/$CODEBERG_REPO/releases/tags/$tag" 2>/dev/null; then
+    echo "  release $tag already exists on Codeberg — leaving it as-is"
+    return
+  fi
+  # The tag must point at the committed source that produced this build.
+  if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
+    printf '\033[33m  ⚠ working tree is dirty — tagging HEAD (%s) anyway.\033[0m\n' "${sha:0:9}" >&2
+  fi
+  if ! git -C "$REPO" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    git -C "$REPO" tag -a "$tag" -m "$name" "$sha"
+  fi
+  git -C "$REPO" push -q origin "refs/tags/$tag"
+
+  if [[ -n "$NOTES_FILE" ]]; then
+    [[ -f "$NOTES_FILE" ]] || die "notes file not found: $NOTES_FILE"
+    body="$(cat "$NOTES_FILE")"
+  else
+    body="$name — auto-updates via Sparkle, or download the DMG below (the same notarized build the updater serves). Requires macOS 14 or later."
+  fi
+  # python3 does the JSON escaping so arbitrary markdown notes can't break the payload.
+  payload="$(TAG="$tag" SHA="$sha" NAME="$name" BODY="$body" python3 -c '
+import json, os
+print(json.dumps({
+    "tag_name": os.environ["TAG"],
+    "target_commitish": os.environ["SHA"],
+    "name": os.environ["NAME"],
+    "body": os.environ["BODY"],
+    "draft": False, "prerelease": False,
+}))')"
+  release_json="$(curl -fsS -X POST "$CODEBERG_API/repos/$CODEBERG_REPO/releases" \
+    -H "Authorization: token $CODEBERG_TOKEN" -H "Content-Type: application/json" \
+    -d "$payload")" || die "Codeberg release creation failed for $tag"
+  id="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' <<<"$release_json")" \
+    || die "could not parse the release id from Codeberg's response"
+  curl -fsS -X POST \
+    "$CODEBERG_API/repos/$CODEBERG_REPO/releases/$id/assets?name=$(basename "$versioned")" \
+    -H "Authorization: token $CODEBERG_TOKEN" \
+    -F "attachment=@$versioned;type=application/octet-stream" >/dev/null \
+    || die "release $tag created but the DMG upload failed — attach it manually, or delete the release and re-run"
+  echo "  ✓ https://codeberg.org/$CODEBERG_REPO/releases/tag/$tag  ($(basename "$versioned"))"
 }
 
 [[ -n "$IDENTITY" && -n "$TEAM" ]] || die "signing identity not set.
@@ -277,7 +359,10 @@ spctl -a -t exec -vv "$APP"
 # ── 6. Appcast (over the stapled DMG) — the Sparkle update feed ─────────────────
 gen_appcast
 
-# ── 7. Publish to Codeberg Pages (only with --publish) ──────────────────────────
-[[ "$PUBLISH" == 1 ]] && do_publish
+# ── 7. Publish to Codeberg Pages (Sparkle feed) + Codeberg Release (only with --publish) ─
+if [[ "$PUBLISH" == 1 ]]; then
+  do_publish
+  do_codeberg_release
+fi
 
 printf '\n\033[32m✓ Release ready: %s\033[0m\n' "$DMG"
