@@ -69,8 +69,8 @@ targets:
       base:
         PRODUCT_NAME: MagicButtons
         PRODUCT_BUNDLE_IDENTIFIER: com.gentleworks.MagicButtons
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "1.1.1"
+        CURRENT_PROJECT_VERSION: "4"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: AppShell/Info.plist
         # Liquid Glass app icon authored in Icon Composer (AppShell/magicbuttons.icon).

@@ -166,6 +166,23 @@ Which to pick is a genuine trade, so both ship:
   exact case `tapAndAHalf` guards. Novel to the mouse (no trackpad equivalent).
   Both verified working on hardware (Phase 8).
 
+  **The resting-finger cost is sharper than "an unintended drag"** (HW-confirmed
+  2026-07-16, once click/drag de-confliction landed — `14-post-v1.md` scenario #9). While
+  that unintended drag is live, **de-confliction swallows physical clicks**, so clicking
+  the shell does nothing until the finger lifts. Rest a finger and then physically
+  double-click and the second click is eaten — the two gestures physically overlap, since
+  in this mode *a resting finger is the drag trigger*. This is **inherent**, not a bug to
+  fix: the mode's premise is that the top surface is free. So `pressAndHold` asks the user
+  to **grip the mouse from the sides and keep the shell clear except when tapping or
+  dragging**; `tapAndAHalf` is the mode for people who rest fingers. Surfaced in the
+  drag-style picker's help text (`AdvancedSettingsView.dragStyleHelp`), which is where the
+  choice is actually made.
+
+  Two boundaries worth keeping straight: it needs **one** resting contact (promotion
+  requires `singleContact`, so two resting fingers never arm it), and a contact that
+  *saw* a physical click never promotes at all — so a double-click begun with the shell
+  clear works normally.
+
 **Known artifact of `tapAndAHalf` + `.immediate` clicks.** Because v1 emits the
 first tap's click immediately and the drag's button-down then lands inside the
 system double-click window, an app reads *click → press-and-move* as a

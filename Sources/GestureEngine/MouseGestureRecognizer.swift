@@ -176,6 +176,10 @@ public final class MouseGestureRecognizer {
     ///   travel ≤ `maxTravel`), so a resting/deliberate press drags but a finger
     ///   *slide* (a scroll) does not. No leading tap → a clean single-press drag.
     ///
+    /// Either way a contact that saw a **physical click** never promotes (when
+    /// `requireNoPhysicalClick`) — the same rule the tap primitive applies, for the same
+    /// reason: that click is the OS's to deliver, not ours to duplicate.
+    ///
     /// The frame-starved case (no interim frame inside the hold window) is handled
     /// defensively in `finalize`.
     private func promoteToHoldIfNeeded(
@@ -183,6 +187,16 @@ public final class MouseGestureRecognizer {
     ) {
         guard !state.didBeginHold else { return }
         guard now - state.startTime >= config.holdThreshold else { return }
+        // A hardware click during this contact's life disqualifies the **hold**, exactly as
+        // it disqualifies a tap (`isTap`): the user is driving the button themselves, so
+        // synthesizing a drag on top would duplicate the OS's own click — and, with
+        // de-confliction armed, would then swallow their *later* physical clicks. That is
+        // what broke physical double-click under `pressAndHold`, where a merely resting
+        // finger promotes: click 1 landed before `holdThreshold`, the still contact then
+        // promoted, and click 2 was swallowed as a "mid-drag squeeze" (docs/14 §Click/drag
+        // de-confliction, finding #2 / scenario #9). Checked here rather than at `.began`
+        // because the flag is set irreversibly mid-contact.
+        if config.requireNoPhysicalClick, state.sawPhysicalClick { return }
         switch config.dragStyle {
         case .tapAndAHalf:
             // Only the immediate second contact hold-promotes; a later tap in a

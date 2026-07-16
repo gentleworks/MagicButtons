@@ -281,6 +281,226 @@ and the running build discovered build 3, verified its EdDSA signature, download
 
 ---
 
+## Click/drag de-confliction ✅ *(done; HW-verified 2026-07-16 — commits `df1d17c`, `78094b7`, `b9cd131`, `d04fd86`, `36e530e`; 179 tests)*
+
+A reliability/definition fix for the **currently shipping additive modes** — not a
+new mode, no suppression toggle. When a synthetic gesture and a physical one collide,
+neither should corrupt the other. Taken on because it has a tangible effect on the
+reliability of drags people already use, and it's the prerequisite arbitration that
+Feature A (suppress physical clicks, `10-roadmap.md` / `05` §Suppress physical clicks)
+would build on.
+
+**Shipped as two complementary halves:**
+
+- **Recognizer** (`promoteToHoldIfNeeded`) — a contact that saw a physical click never
+  promotes to a hold, the same rule the tap primitive already applied. Stops spurious
+  holds from arming at all, and kills scenario #2 (competing drag start) at the source.
+- **Interceptor** (`shouldSwallow`) — on the holds that legitimately do arm, a physical
+  down is swallowed while the hold owns the pointer, and its up iff its down was
+  swallowed (approach (c), balanced-swallow).
+
+**HW verification (2026-07-16) confirmed:** mid-drag squeezes no longer interrupt a drag
+(the headline fix) under **both** drag styles; physical single/double/triple-click all
+work; a clean resting press still drags. The session also caught scenario #9 — a
+regression the up-front reasoning missed — which is why the recognizer half exists.
+
+**Also fixed here, pre-existing:** under `pressAndHold` the app was already synthesizing a
+drag *on top of* the user's own physical click; the swallow merely made it visible.
+
+**Known residual (inherent, mitigation declined):** in `pressAndHold`, resting a finger
+past `holdThreshold` arms a drag, and physical clicks are then swallowed until it lifts —
+so rest-then-double-click doesn't work. The two gestures physically overlap, since in that
+mode *a resting finger is the drag trigger*. Surfaced in the drag-style picker's help text
+rather than mitigated; `tapAndAHalf` is the mode for people who rest fingers (docs/03
+§Drag styles).
+
+**Scope both drag styles** — the collision windows differ:
+
+- `tapAndAHalf` — the synthetic button is already down for the whole move, so the
+  interceptor's `dragZone` is set across the entire drag.
+- `pressAndHold` — a held contact may not have armed the synthetic button yet at the
+  instant the shell is squeezed, so keying off `dragZone` alone leaves a gap at
+  drag-onset; the guard must also see the recognizer's hold-arming state
+  (`heldZones` in `GesturePipeline` / the arming window in `MouseGestureRecognizer`).
+
+### Measurement first
+
+Reproduce and log each collision on hardware before coding — with the purpose-built
+**`mb-dev log-conflicts [seconds] [tap|hold] [path]`** (docs/13), which runs the real
+pipeline (drag promotion wired) and writes a timestamped CSV interleaving physical
+clicks, synthetic press/release/click, and contact changes, each tagged `hold_active`.
+Run it under **both** styles: squeeze the shell mid-drag; race a physical press against
+a `tapAndAHalf` onset; race a physical click against a same-zone tap click. The summary
+counts physical events that hit during a synthetic drag; the CSV shows what the OS
+actually did (drop / select / reorder) so the fix targets real behavior. *(Built
+2026-07-16 as the first step of this feature; `verify-gesture` alone can't drag or log
+the timeline.)*
+
+### Measured findings (first HW session, 2026-07-16)
+
+Two 30 s captures, one per style (`conflicts-*` CSVs). What they changed:
+
+1. **Collisions are routine, both styles** — every deliberate click-to-drag put a
+   synthetic hold concurrent with physical button events (`tapAndAHalf` flagged 6
+   in-hold physical transitions; `pressAndHold` 13).
+2. **`requireNoPhysicalClick` gates only *taps*, not holds.** A physical click already
+   held when a contact promotes still lets the drag start, so the app gets **both** a
+   real button-down and a synthetic one. Drag onset needs explicit arbitration.
+3. **The *straddle* is the common case, and it breaks a naive "swallow while `dragZone`
+   set" rule.** The dominant real pattern (both styles) is: physical **down** during
+   *arming* (`hold_active=0`, contact present, pre-promotion) → synth **press** →
+   physical **up** during the hold (`hold_active=1`) → synth **release**. Keying on the
+   active hold alone swallows the *up* but not the *down* → **unbalanced physical
+   state**. So balanced-swallow (scenario #4) is the *main* path, not an edge.
+4. **Both styles have an arming window.** `tapAndAHalf`'s *second contact* has the same
+   landing→promotion gap as `pressAndHold`'s pre-threshold window — a physical down
+   lands there in both. The table's arming row applies to **both**, not just
+   `pressAndHold`.
+5. **Cross-zone confirmed** — a zone-less physical click (posts as left) collided with a
+   synthetic **middle** hold. Arbitration must not assume same zone (scenario #6).
+6. **Lone physical clicks self-resolve (scenario #3 → accept, don't swallow).** Physical
+   clicks with a resting finger emitted **no** synthetic click — the coincident tap was
+   rejected by `requireNoPhysicalClick` — so no double actuation to fix.
+
+**The crux the data forces:** the physical down usually arrives *before* we know the
+contact will become a drag, so swallowing can't be purely reactive. Three fix
+directions, to decide before coding:
+
+- **(a) Buffer/defer the physical down** briefly; drop on promotion, replay otherwise —
+  needs the timer/`Scheduler` seam v1 avoided (same cost as deferred-click).
+- **(b) Adopt the physical hold as the drag** — if a physical button is already held at
+  promotion, arm move→drag promotion on *it* instead of synthesizing a second press.
+- **(c) Accept the leaked down but guarantee balance** — track swallowed buttons so a
+  down that leaked pre-hold lets its up leak too; never leave unbalanced state (accepts
+  one concurrent real click, prevents the dangling-button corruption).
+
+### Decision table — physical event × pointer state, per drag style
+
+As implemented under (c) — `EventInterceptor.shouldSwallow`:
+
+| Pointer state | physical down | physical up |
+|---|---|---|
+| idle (no synthetic gesture) | pass | pass |
+| hold **arming** (contact landed, not yet promoted — either style) | **pass** (leaks; balanced by its up also passing) | swallow iff its down was swallowed |
+| hold **active** (`dragZone` set, either style) | **swallow** | swallow iff its down was swallowed |
+
+"Swallow" = `EventInterceptor.handle` returns `nil`. Outside a synthetic drag, physical
+clicks always pass — this feature adds no Feature-A suppression. The balance rule
+(swallow an *up* only if its *down* was swallowed) is what keeps the straddle safe
+(finding #3), and it holds **across drag-end**, so the up of a swallowed down is
+swallowed even after the drag is over (scenario #4).
+
+**The arming row collapses under (c).** Because the rule keys on "is a hold active" plus
+the balance invariant, the guard needs **no** knowledge of the arming window or the drag
+*style* — an arming-window down simply passes, and its up passes with it. The
+style-specific arming distinction (finding #4) only mattered for the rejected approaches
+(a)/(b). So `shouldSwallow` takes no `dragStyle`, and the unit tests need no style axis;
+both styles still get exercised at the **pipeline** level in the HW gate, where the
+recognizer's timing differs.
+
+**Known interaction — a stuck drag makes the mouse feel dead.** Swallowing is scoped to
+`dragZone != nil`, so if a synthetic hold ever *stuck*, physical clicks would be
+swallowed too and the shell would stop responding until the process quits. The
+stuck-button safeguards (`05` §Stuck-button safeguards; guard-on-trusted, idempotent
+release, release-on-device-loss) are what keep `dragZone` from sticking, and they now
+carry this extra weight. The documented recovery still works unchanged — quitting kills
+the tap, and *then* a physical click clears anything left (docs/13) — because the swallow
+dies with the tap. Worth an explicit HW check.
+
+### Chosen approach (decided 2026-07-16, from the measured findings)
+
+- **(c) balanced-swallow is the baseline.** It fixes the two worst outcomes — the
+  stuck/unbalanced button and the clean mid-drag squeeze (both physical events inside
+  the hold → both swallowed, the common case) — with no timer and no new seam, keeping
+  the recognizer clock-free. Residual: the straddle's leaked *down* completes as a
+  *balanced* concurrent real click (a double-actuation, not a corruption).
+- **(b) adopt-the-physical-hold, layered on only where the physical button matches the
+  drag-zone button.** It can't handle cross-zone (physical is always left/right; a
+  drag zone can be middle — finding #5) and does nothing for the pure mid-drag squeeze,
+  so it rides on top of (c), not instead of it. Add it only if (c)'s residual
+  double-actuation proves annoying in practice.
+- **(a) buffer/defer — NOT now.** The only option that eliminates the leaked down, but
+  it reintroduces the `Scheduler`/timer seam and added latency that got deferred-click
+  parked. Shelved: fold into **deferred click** (`10-roadmap.md`) if that's ever built.
+- **Plus a recognizer guard (added after HW testing).** (c) alone was not enough: it
+  assumes a synthetic hold implies the user is dragging, which `pressAndHold` violates.
+  `promoteToHoldIfNeeded` now refuses to promote a contact that saw a physical click
+  (scenario #9). The two halves are complementary — the recognizer stops spurious holds
+  from arming, and the interceptor swallows squeezes on the holds that legitimately do.
+
+### Scenarios covered
+
+1. **Errant click mid-drag** — the shell squeezed during a synthetic drag posts a
+   physical down/up *inside* the held button, which the OS can read as a drop or a
+   competing selection. Swallowing physical down/up while a drag is active fixes it.
+2. **Competing drag start** — a physical press-drag races a `tapAndAHalf` onset →
+   two `…MouseDragged` streams. One owner: if a synthetic hold is arming/active,
+   physical drag is suppressed.
+3. **Competing single click** — a physical click ~coincident with a tap-derived
+   click → double actuation. Least severe; confirm from the measurement whether to
+   swallow or accept.
+
+### Further conflict scenarios (reasoned; **not** assumed exhaustive)
+
+Harder to enumerate up front — capture what we can, fix what we can, and expect new
+sources to surface once we're logging real collisions. Reasoned so far:
+
+4. **Balanced swallow across drag-end (invariant, not just a scenario).** If we
+   swallow a physical *down* during a drag, we must swallow its matching *up* **even
+   if the drag ends in between** (finger lifts, `dragZone` clears). Track swallowed
+   physical buttons explicitly and drain them on their own up — never leak an
+   unbalanced physical up. This mirrors, inverted, the §Stuck-button "never drop a
+   button-up we pressed" invariant.
+5. **Multiple physical presses within one drag.** A user may squeeze the shell
+   repeatedly mid-drag. The guard is a **count/set of swallowed buttons**, not a
+   boolean — each down/up pair balanced independently (see #4).
+6. **Physical clicks are zone-less; synthetic clicks aren't.** A physical click
+   carries no zone (it's whole-shell / cursor-located), while a synthetic click is
+   derived from finger position. So a collision can be **cross-zone** — physical left
+   colliding with a synthetic *right* while a finger rests in the right zone. Any
+   "coincident click" arbitration must not assume same-zone.
+7. **Physical click during a multi-click run.** A physical click landing inside a
+   `click(1→2→3)` run (within `doubleTapGap`) can inject a phantom actuation or skew
+   the count the app perceives. Distinct from the single-click case (#3) because the
+   run is mid-assembly.
+8. **Scroll / momentum — explicitly out of scope.** Surface-scroll produces
+   `scrollWheel` events, which the interceptor does **not** touch; they pass through
+   untouched even during a synthetic hold. Recorded as a boundary so it isn't
+   re-litigated: de-confliction covers button/drag events only.
+9. **A synthetic hold armed by a *resting* finger swallows the user's own physical
+   clicks** — ***found on hardware 2026-07-16; the one we did **not** reason out.***
+   Physical double-click stopped selecting a word under `pressAndHold`. Chain: click 1
+   lands before `holdThreshold` (so it passes — which is why *single* clicks still
+   worked); the finger keeps resting; the still contact promotes to a synthetic drag,
+   because promotion **never checked `sawPhysicalClick`** (finding #2); `dragZone` is now
+   set, so click 2 is swallowed as a "mid-drag squeeze." Triple-click loses clicks 2
+   *and* 3. Generalized: **in `pressAndHold`, any physical click after a finger rests past
+   `holdThreshold` was swallowed** — double-click merely exposed it, because its second
+   click necessarily arrives later.
+
+   **Fix — extend `requireNoPhysicalClick` to holds** (`promoteToHoldIfNeeded`): a contact
+   that saw a physical click never promotes, exactly as it can never be a tap, and for the
+   same stated reason — *that click is the OS's to deliver, not ours to duplicate*. This
+   also fixes a **pre-existing** bug the swallow merely made visible: under `pressAndHold`
+   the app was already synthesizing a drag on top of the user's physical click. And it
+   resolves scenario #2 (competing drag start) **at the source**, which in turn makes the
+   straddle largely moot for drag *onset* — a down during arming now prevents the
+   promotion outright, so there is no hold for its up to land inside.
+
+   **Correction to this doc:** the earlier claim that "`dragZone != nil`" is a sufficient
+   signal was wrong. It is a strong proxy for "the user is dragging" under `tapAndAHalf`
+   (deliberate tap-then-hold) but a **weak** one under `pressAndHold`, where a merely
+   resting finger arms it. The swallow rule still needs no `dragStyle`, but it depends on
+   the recognizer not arming spurious holds — which is why the guard belongs there.
+
+### Tests
+
+- Unit: feed synthetic `CGEvent`s to `EventInterceptor.handle(...)` across the table
+  above for **each** `dragStyle`; assert swallow vs pass, and that no button-up is
+  ever dropped for a held button (mirrors §Stuck-button hardening, `05` §Press/release).
+- HW exit gate: run each measured scenario on the Magic Mouse under **both** drag
+  styles; confirm no corrupted drag and no double actuation.
+
 ## In progress / next
 
 Sparkle is **DONE (HW-verified 2026-07-15)**: in-app integration, EdDSA keys, and the full
@@ -288,6 +508,16 @@ release pipeline (build-number forcing function → re-signed helpers → notari
 status-check → signed appcast → `--publish` to Codeberg Pages **+ a mirrored Codeberg
 Release** for the hand-download) are built, a real notarized build 3 is **live**, and a build
 2 → 3 auto-update **installed cleanly on hardware**. The
-beta channel (S4) is deferred to `10-roadmap.md`. Nothing else committed to build right now;
-candidate features live in `10-roadmap.md` (nearest: deferred-click timing,
-`clickTiming = .deferred`, specified in docs/03 §Click timing).
+beta channel (S4) is deferred to `10-roadmap.md`.
+
+**Click/drag de-confliction is DONE + HW-verified 2026-07-16** (section above) —
+unreleased; version bumped to **1.1.1** in anticipation, no release cut yet. Release notes
+are written ad hoc at cut time (`release.sh --notes FILE`); nothing pending is tracked.
+
+**Next up: diagnostics mode** — an opt-in in-app troubleshooting log, promoted to ⭐
+probable-next-feature in `10-roadmap.md` after this session showed how much more the
+hardware teaches than reasoning does (scenario #9 was found only by testing). Most seams
+already exist; `ConflictLog` in `mb-dev` is the recorder. Other candidates live in
+`10-roadmap.md` (e.g. deferred-click timing, `clickTiming = .deferred`, specified in
+docs/03 §Click timing; and Feature A, suppress physical clicks, deferred with a full
+design capture in `05` §Suppress physical clicks).

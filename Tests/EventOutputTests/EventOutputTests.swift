@@ -146,6 +146,109 @@ import TouchKit
     }
 }
 
+/// Click/drag de-confliction (docs/14), chosen approach **(c) balanced-swallow**: a
+/// physical down is consumed only while a synthetic hold owns the pointer, and an up only
+/// if its down was consumed. Driven through `shouldSwallow` directly — the swallow
+/// decision is the whole feature; `handle` only turns `true` into a `nil` return.
+@Suite struct ClickDragDeconflictionTests {
+    /// Button numbers as they arrive on a real event (`.mouseEventButtonNumber`).
+    private static let left = Int64(CGMouseButton.left.rawValue)
+    private static let right = Int64(CGMouseButton.right.rawValue)
+    private static let middle = Int64(CGMouseButton.center.rawValue)
+
+    // MARK: idle — physical clicks are untouched (this is not Feature A suppression)
+
+    @Test func physicalDownPassesWhenNoDragIsActive() {
+        let interceptor = EventInterceptor()
+        #expect(!interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+    }
+
+    @Test func physicalUpPassesWhenNoDragIsActive() {
+        let interceptor = EventInterceptor()
+        #expect(!interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    // MARK: hold active — the errant click mid-drag (docs/14 scenario #1)
+
+    @Test func physicalPairIsSwallowedEntirelyDuringASyntheticDrag() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        #expect(interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+        #expect(interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    /// The measured common case: the down lands while the contact is still *arming*, so it
+    /// leaks; its up then lands inside the hold. Swallowing that up would strand a
+    /// button-down the app never sees released — so the pair must leak together.
+    @Test func straddlingPairLeaksEntirelySoTheRealClickStaysBalanced() {
+        let interceptor = EventInterceptor()
+        // down arrives BEFORE the hold begins → passes
+        #expect(!interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+        interceptor.beginDragPromotion(zone: .left)
+        // up arrives DURING the hold → must still pass, because its down did
+        #expect(!interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    /// docs/14 scenario #4 — the balance invariant outlives the drag.
+    @Test func swallowedDownStillSwallowsItsUpAfterTheDragEnds() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        #expect(interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+        interceptor.endDragPromotion()   // finger lifted between the down and its up
+        #expect(interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    /// docs/14 scenario #5 — the guard is a set, not a flag.
+    @Test func repeatedSqueezesWithinOneDragEachBalance() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        for _ in 0..<3 {
+            #expect(interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+            #expect(interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+        }
+        // ...and once drained, a fresh up (no matching swallowed down) still passes.
+        #expect(!interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    /// docs/14 scenario #6 — a physical click is zone-less and can collide with a
+    /// `middle` hold, so pairs are matched by button number, never by zone.
+    @Test func swallowIsMatchedPerButtonAcrossZones() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .middle)   // synthetic hold on the middle button
+        #expect(interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+        // A right-up whose down we never swallowed must pass, even mid-drag.
+        #expect(!interceptor.shouldSwallow(type: .rightMouseUp, buttonNumber: Self.right))
+        // The left pair still balances.
+        #expect(interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    @Test func eachButtonIsTrackedIndependently() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        #expect(interceptor.shouldSwallow(type: .leftMouseDown, buttonNumber: Self.left))
+        #expect(interceptor.shouldSwallow(type: .rightMouseDown, buttonNumber: Self.right))
+        #expect(interceptor.shouldSwallow(type: .rightMouseUp, buttonNumber: Self.right))
+        #expect(interceptor.shouldSwallow(type: .leftMouseUp, buttonNumber: Self.left))
+    }
+
+    // MARK: never swallowed
+
+    @Test func movesAreNeverSwallowedEvenWhileDragging() {
+        // Moves are *rewritten* by drag promotion, never consumed.
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        #expect(!interceptor.shouldSwallow(type: .mouseMoved, buttonNumber: Self.left))
+        #expect(!interceptor.shouldSwallow(type: .leftMouseDragged, buttonNumber: Self.left))
+    }
+
+    @Test func middleButtonPairSwallowsDuringADrag() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        #expect(interceptor.shouldSwallow(type: .otherMouseDown, buttonNumber: Self.middle))
+        #expect(interceptor.shouldSwallow(type: .otherMouseUp, buttonNumber: Self.middle))
+    }
+}
+
 /// Records drag-promotion arm/disarm so a test can observe whether `press`/`release`
 /// proceeded, without inspecting the real events the emitter posts. Held weakly by the
 /// emitter, so the test keeps its own strong reference alive.

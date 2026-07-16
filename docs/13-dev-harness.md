@@ -84,11 +84,13 @@ Enough vocabulary to read the rest of this page. Skip if it's old news.
 | `verify-tap [s]` | Are real physical clicks detected (and not duplicated)? | Accessibility |
 | `verify-gesture [s]` | Does the *whole* pipeline turn a tap into a real click? | Accessibility |
 | `log-gestures [s] [path]` | Capture real contacts to a CSV for threshold tuning | Magic Mouse |
+| `log-conflicts [s] [tap\|hold] [path]` | When do physical clicks collide with synthetic clicks/drags? | Accessibility + Magic Mouse |
 | `probe-cadence [s]` | How continuous is the frame stream while a finger is down? | Magic Mouse |
 
 Defaults: `verify-emit` zone `middle`, count `1`; `dump-frames` and `verify-source`
 run `10s`; `verify-tap`, `verify-gesture`, `verify-two-mouse`, and `probe-cadence`
-run `20s`; `log-gestures` runs `30s`.
+run `20s`; `log-gestures` and `log-conflicts` run `30s` (`log-conflicts` drag style
+defaults to `tap`).
 
 ### Check your setup
 
@@ -149,6 +151,30 @@ feature.
 current thresholds). It **filters and posts nothing** — pure measurement. Use it to
 gather real data before adjusting zone boundaries or tap thresholds. Writes to a
 timestamped file by default, or to `path` if given.
+
+**`log-conflicts [seconds] [tap|hold] [path]`** — The measurement instrument for
+**Feature B** (click/drag de-confliction, `14-post-v1.md`). It runs the *real*
+shipping pipeline — same recognizer and `CGEventEmitter`, with drag promotion armed
+through the same `EventInterceptor` that reports physical clicks — and writes a single
+timestamped CSV interleaving **three** streams: physical clicks (`down`/`up`),
+synthetic emissions (`press`/`release`/`click`), and contact-set changes. Every row
+carries a `hold_active` column, so a physical event that lands during a synthetic drag
+(the core collision) is a one-column filter, and the end-of-run summary counts them.
+Physical rows also carry a **`swallowed`** column — whether de-confliction *consumed*
+the event (docs/14) — so the fix is provable from the CSV rather than inferred: a
+squeeze that begins inside a drag should read `hold_active=1, swallowed=1` for **both**
+its down and its up, while a *straddle* pair (down before the hold began) should read
+`swallowed=0` for both, leaking together so the real click stays balanced. The summary
+splits collisions into swallowed vs passed for exactly that reason.
+Unlike `log-gestures` it **posts real events** (so a genuine drag exists to collide
+with) and needs **Accessibility**; unlike `verify-gesture` it wires the drag promoter
+(so moves actually drag) and logs the timeline. Pick the drag style — `tap`
+(tap-and-a-half, default) or `hold` (press-and-hold) — and **run both**, since the two
+have different collision windows. On hardware, reproduce each case: squeeze the shell
+mid-drag, race a physical press against a drag onset, race a physical click against a
+same-zone tap; the ⚠︎ lines and the `collisions` count tell you what actually happened.
+*Because it holds a synthetic button, the stuck-button guards apply* (`05` §Stuck-button
+safeguards) — a stray physical click clears any leftover synthetic drag.
 
 **`probe-cadence [seconds]`** — Measures how *continuous* the frame stream is while
 a finger is held, especially resting motionless. This exists because a stream that

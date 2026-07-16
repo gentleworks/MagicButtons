@@ -77,11 +77,13 @@ struct AdvancedSettingsView: View {
         case .tapAndAHalf:
             return "Tap, then press and hold a second time and move the mouse to drag. "
                 + "Deliberate and familiar from the trackpad; a drag on text starts by "
-                + "selecting the word under the pointer."
+                + "selecting the word under the pointer. Fingers can rest on the shell."
         case .pressAndHold:
             return "Hold one finger still, then move the mouse to drag — no first tap, so "
-                + "text and small handles stay precise. A finger left resting on the shell "
-                + "can start a drag."
+                + "text and small handles stay precise. Grip the mouse from the sides and "
+                + "keep the top surface clear except when tapping or dragging: a finger "
+                + "left resting on the shell starts a drag, and clicking the mouse won't "
+                + "register until it lifts."
         }
     }
 

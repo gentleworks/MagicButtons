@@ -435,3 +435,80 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
         #expect(out == [.holdBegan(zone: .left), .holdEnded(zone: .left)])
     }
 }
+
+/// A contact that saw a physical click must never promote to a **hold**, the same rule
+/// the tap primitive already applies — that click is the OS's to deliver, not ours to
+/// duplicate.
+///
+/// Found on hardware (docs/14 §Click/drag de-confliction, scenario #9): under
+/// `pressAndHold` a *resting* finger promotes at `holdThreshold`, so a physical
+/// double-click armed a synthetic drag between its two clicks — and de-confliction then
+/// swallowed click 2 as a "mid-drag squeeze," so no word was selected. Blocking promotion
+/// fixes the regression *and* stops the (pre-existing) synthetic drag from being
+/// duplicated on top of the user's own click.
+@Suite struct PhysicalClickBlocksHoldTests {
+    private let left = CGPoint(x: 0.1, y: 0.5)
+
+    private func touch(_ phase: TouchPhase, _ t: TimeInterval, id: Int32 = 1) -> SurfaceTouch {
+        SurfaceTouch(deviceID: device, id: id, position: CGPoint(x: 0.1, y: 0.5),
+                     phase: phase, timestamp: t, size: 0.3)
+    }
+
+    /// A still contact living `hold` seconds from `t0`, with the hardware click held for
+    /// `click` — the shape of a real shell click under a resting finger. `click = nil`
+    /// means no physical click at all.
+    private func heldWithClick(
+        t0: TimeInterval = 0, hold: TimeInterval, click: ClosedRange<TimeInterval>?,
+        id: Int32 = 1
+    ) -> [Frame] {
+        var frames = [Frame(touches: [touch(.began, t0, id: id)], physicalClickActive: false)]
+        var t = t0 + 0.02
+        while t < t0 + hold {
+            let clicking = click.map { $0.contains(t - t0) } ?? false
+            frames.append(Frame(touches: [touch(.moved, t, id: id)], physicalClickActive: clicking))
+            t += 0.02
+        }
+        frames.append(Frame(touches: [touch(.ended, t0 + hold, id: id)], physicalClickActive: false))
+        return frames
+    }
+
+    @Test func pressAndHoldDoesNotPromoteAfterAPhysicalClick() {
+        // The regression, reproduced: click lands early, the finger keeps resting past
+        // holdThreshold. No synthetic drag may arm.
+        let out = run(heldWithClick(hold: 0.40, click: 0.04...0.10),
+                      config: GestureConfig(dragStyle: .pressAndHold))
+        #expect(!out.contains(.holdBegan(zone: .left)))
+        #expect(out.isEmpty)   // nor a tap — the same click disqualifies that
+    }
+
+    @Test func tapAndAHalfDoesNotPromoteAfterAPhysicalClick() {
+        // Same rule on the other style: the held second contact saw a click → no drag.
+        let frames = tap(at: left, t0: 0)
+            + heldWithClick(t0: 0.20, hold: 0.40, click: 0.04...0.10, id: 2)
+        let out = run(frames, config: GestureConfig(dragStyle: .tapAndAHalf))
+        #expect(!out.contains(.holdBegan(zone: .left)))
+    }
+
+    @Test func aCleanRestingPressStillDrags() {
+        // Guard against over-correction: with no physical click, pressAndHold still drags.
+        let out = run(heldWithClick(hold: 0.40, click: nil),
+                      config: GestureConfig(dragStyle: .pressAndHold))
+        #expect(out == [.holdBegan(zone: .left), .holdEnded(zone: .left)])
+    }
+
+    @Test func aClickAfterPromotionDoesNotCancelTheDrag() {
+        // The genuine mid-drag squeeze: the contact promoted *before* any click, so the
+        // drag stands and de-confliction (not the recognizer) handles the squeeze.
+        let out = run(heldWithClick(hold: 0.60, click: 0.40...0.46),
+                      config: GestureConfig(dragStyle: .pressAndHold))
+        #expect(out == [.holdBegan(zone: .left), .holdEnded(zone: .left)])
+    }
+
+    @Test func promotionResumesWhenRequireNoPhysicalClickIsOff() {
+        // Gated by the same flag as the tap rule, so the escape hatch stays consistent.
+        let out = run(heldWithClick(hold: 0.40, click: 0.04...0.10),
+                      config: GestureConfig(requireNoPhysicalClick: false,
+                                            dragStyle: .pressAndHold))
+        #expect(out.contains(.holdBegan(zone: .left)))
+    }
+}

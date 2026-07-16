@@ -23,15 +23,52 @@ place without building them now.
 
 ## v2 candidates
 
+- **Diagnostics mode (in-app troubleshooting log)** — ⭐ **probable next feature**, after
+  Feature B lands. An **opt-in** mode that records real interaction to a log the user can
+  attach to a problem report.
+
+  *Why it's near the front:* synthetic reproduction is **harder and less representative
+  than everyday interaction**. The Feature B measurement session (`14-post-v1.md`
+  §Measured findings) made the case: producing clean `tapAndAHalf` collision captures took
+  deliberate effort, and the decisive finding — the straddle — is a timing artifact of
+  *natural* use. When a user reports "drags sometimes drop," in-situ data is the only way
+  to see what actually happened. It also pairs with **Feature A**: if suppression ever
+  ships, in-situ logs are how a stuck-mouse report gets debugged.
+
+  *Seams already in place (most of the work is done):*
+  - `AppCoordinator.onFrame` and `onGesture` are already **optional read-only tees** (the
+    Visualizer uses them). A recorder just sets them.
+  - Physical clicks need one small addition — the coordinator monopolizes
+    `clickSource.onPhysicalClickChange` in `wire()`; expose an optional `onPhysicalClick`
+    tee composed there, same pattern as `onGesture` (~2 lines).
+  - `ConflictLog` (added with `mb-dev log-conflicts`, docs/13) is the reusable basis: a
+    three-stream, `hold_active`-tagged CSV writer. Promote it into `AppCore`.
+
+  *Hard requirement — zero overhead when off:* nil closures, no allocation, no file
+  handle; nothing is installed until the toggle flips. When **on**, buffer rows and flush
+  on a background queue so file I/O can't perturb the very timing being recorded.
+
+  *Privacy:* records event **types, zones, and timings** — no text, no cursor coordinates
+  (position is consumed only to derive a zone), so a log is safe to attach to a bug report.
+  Opt-in and clearly labeled regardless.
+
+  *Still needs its own (small) design pass:* the UI affordance (toggle + "Reveal log" /
+  "Export for bug report"), a log size cap / rotation, and the write location
+  (Application Support).
+
 - **Sparkle beta channel** — a `beta` appcast channel for a tester track (deferred from the
   Sparkle work 2026-07-15; no testers yet). Cheap when needed: app-side
   `SPUUpdaterDelegate.allowedChannelsForUpdater:` → `["beta"]` behind an opt-in pref;
   release-side `generate_appcast --channel beta` (a `release.sh --beta` flag). Build-number
-  increments per beta, clean version string (Paul's earlier decision).
-- **Suppress physical clicks** — optionally consume the hardware left/right click
-  so tap-to-click *replaces* rather than *adds*. Mechanism already anticipated:
-  the `EventInterceptor` active tap flips from pass-through to consuming
-  (`05-event-output.md`). Needs care around drag and modifier clicks.
+  increments per beta, clean version string (the earlier decision).
+- **Suppress physical clicks (Feature A)** — optionally consume the hardware
+  left/right click so tap-to-click *replaces* rather than *adds*. Mechanism already
+  anticipated: the `EventInterceptor` active tap flips from pass-through to consuming.
+  **Deferred, not scheduled** — real system-wide-wedge risk, no current need. Full
+  design capture (measurement-first process, the inert-vs-re-emit fork, modifier/chord
+  + device-scope hazards, two-tier safety story) lives in **`05-event-output.md`
+  §Suppress physical clicks**. Its de-confliction prerequisite ships separately as
+  **Feature B** — **`14-post-v1.md` §Click/drag de-confliction**, queued next.
 - **Per-app profiles** — different feature sets / zones per frontmost app. The
   policy layer is designed to accept a frontmost-app signal (via
   `NSWorkspace.didActivateApplication`); v1 wires nothing but keeps feature
@@ -84,6 +121,7 @@ and were consciously left for later. Kept here so they aren't lost.
 | Future feature | v1 affordance already in place |
 |----------------|-------------------------------|
 | Suppress clicks | active `EventInterceptor` tap (pass-through now) |
+| Diagnostics mode | `AppCoordinator.onFrame`/`onGesture` read-only tees (nil = off, zero cost); `ConflictLog` in `mb-dev` as the recorder |
 | Per-app profiles | single policy layer that filters gestures by feature |
 | Multi-finger | `fingerCount` on `ButtonGesture`; frame-level touch sets |
 | More button kinds | `ButtonEmitting` protocol; policy chooses emitter |

@@ -222,10 +222,95 @@ final class EventInterceptor {
 Notes:
 - **Location** for synthesized events is the *current cursor* position, not the
   finger's shell position (finger ≠ cursor).
-- The tap is **pass-through by default** — v1 does not consume physical clicks;
-  it only *adds* dragged-event promotion during holds. v2 suppression flips a
-  flag here to also swallow the hardware click.
+- The tap is **pass-through except in two narrow cases**: the move→drag rewrite
+  above, and the **de-confliction swallow** — a physical button-down consumed while
+  a synthetic hold owns the pointer, plus its matching up (`shouldSwallow`; docs/14
+  §Click/drag de-confliction). Outside a synthetic drag every physical click still
+  passes untouched. That is **not** Feature A: blanket suppression stays deferred
+  (§Suppress physical clicks), and would additionally swallow clicks with no drag in
+  flight.
 - `CGEvent.post` and tap callbacks run on the serial output/recognition queue.
+
+## Suppress physical clicks (Feature A — deferred; design capture)
+
+**Status: not scheduled.** Captured so the cost is legible if it's ever requested.
+The risk below is real and there is no current need, so this stays a future item;
+what follows is everything we know about *how* to tackle it — not a build plan.
+
+**Goal.** Optionally **consume** the hardware left/right click so tap-to-click
+*replaces* rather than *adds*. The machinery already exists: the active
+`EventInterceptor` (`handle(type:event:)`) sees every physical down/up and today
+passes them through. Suppression returns `nil` for those events behind an opt-in
+flag, gated on tap being enabled.
+
+### Measurement first (gates the mechanism)
+
+Course-correcting on data is expected, but one unknown gates the whole design, so
+measure it before speccing the mechanism — with the dev harness (`mb-dev
+log-gestures`, docs/13):
+
+- Log touch frames **and** physical click events with timestamps under Mode-1
+  conditions: rest a finger then click; click *cold* with no resting finger; fast
+  clicks; ⌘/⇧/⌃-clicks.
+- Characterize: (a) does **every** shell click coincide with a touch contact;
+  (b) the lead time between contact-resume and shell actuation on a *cold* click;
+  (c) the frame rate.
+
+Why it matters: the click is a dome switch under a capacitive shell, so a finger in
+contact necessarily precedes/accompanies actuation — a click with **zero** frames
+should be near-impossible, and "no frames for N s" should reliably mean *hand is off
+the mouse*, not *a click is imminent*. The open number is the cold-engage timing
+(b), which decides whether the frame-idle disengage (below) is viable and whether
+the first click after re-engage leaks through as physical.
+
+### The inert-vs-re-emit fork (decide before building)
+
+A shell click is disqualified from being a tap (`requireNoPhysicalClick`). So if we
+suppress the physical click and it can't become a tap, **pressing the shell produces
+nothing** — inert shell, tap the only click path. Coherent, but a habitual presser
+gets silence. Two readings:
+
+1. **Inert shell** — suppress and emit nothing. Simplest; surprising for pressers.
+2. **Re-emit (recommended)** — suppress the physical event but synthesize a zone
+   click in its place, **carrying the live `CGEventFlags`** so ⌘/⇧/⌃/⌥-click keep
+   working. More faithful; more machinery — and it's where the modifier work lives.
+
+### Correctness hazards (all live only in this mode)
+
+- **Modifier / chord clicks.** ⌘-/⇧-/⌥-click must keep their modifiers. Under
+  re-emit, flags are copied onto the synthetic click at emit time; under inert, the
+  modified press is simply lost. **Biggest correctness risk.**
+- **⌃-click is a secondary click** on macOS. Suppressing physical left and
+  re-emitting left silently changes ⌃-click's meaning — preserve or re-derive it.
+- **Device scoping.** Suppress only clicks originating from the Magic Mouse. A
+  trackpad or a second plain mouse must pass through untouched — we can't replace
+  *their* clicks with taps (multiple mice is already supported, docs/00).
+
+### Safety — two tiers
+
+Consuming every click is far riskier than the v1 promotion tap: an orphaned or
+wedged consuming tap means **all clicking wedges system-wide** (§Interceptor
+lifetime). Split the story:
+
+- **Load-bearing (must-have; touch-independent).**
+  - Reconcile suppression on the exact edges the tap already uses — disable /
+    Accessibility-revoke / device-loss each **restore passthrough** (same seams as
+    §Interceptor lifetime).
+  - A **keyboard panic shortcut** that force-restores passthrough — works even when
+    the mouse appears dead.
+  - A **watchdog on the output/recognition queue** so a hung callback can't hold
+    every click hostage.
+- **Optional (measure-first).** **Frame-idle disengage:** restore passthrough after
+  N s with no touch frames; re-arm on next contact. Convenience only — its viability
+  and the first-click-leak-on-re-engage question both depend on the measurement
+  above. Do **not** make correctness depend on it.
+
+### Prerequisite
+
+Feature B (§ click/drag de-confliction, `14-post-v1.md`) is effectively a
+prerequisite: this mode must never let a stray physical event corrupt an in-flight
+synthetic drag, and B defines that arbitration — for both drag styles — first, in
+the shipping additive product.
 
 ## Testability
 
