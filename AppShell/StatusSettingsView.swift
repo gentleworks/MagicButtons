@@ -43,8 +43,53 @@ struct StatusSettingsView: View {
                         .foregroundStyle(.orange)
                 }
             }
+
+            troubleshooting
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: Troubleshooting
+
+    /// Opt-in recording (docs/10 §Diagnostics mode), last because it's the escalation for
+    /// when the readouts above all look fine and it still misbehaves. The note line follows
+    /// the Features pane's idiom: the explainer swaps to an orange note when there's
+    /// something to say — recording stopped on its own, or couldn't start at all.
+    @ViewBuilder
+    private var troubleshooting: some View {
+        Section {
+            Toggle("Record a troubleshooting log", isOn: $model.isRecordingDiagnostics)
+                .toggleStyle(.switch)
+            Text(model.diagnosticsNote ?? recordingHelp)
+                .font(.footnote)
+                .foregroundStyle(model.diagnosticsNote == nil ? Color.secondary : Color.orange)
+            HStack {
+                // Always shown, disabled until there's something to reveal — a button that
+                // appears and disappears is harder to find than one that's simply dimmed.
+                Button("Reveal in Finder…") { model.revealDiagnosticsLog() }
+                    .disabled(model.diagnosticsLogURL == nil)
+                Spacer()
+            }
+        } header: {
+            Text("Troubleshooting")
+        } footer: {
+            // The privacy claim is the reason this is attachable to a public bug report, so
+            // it's stated plainly rather than left for the user to wonder about.
+            Text("The log records which zone your finger touches, the gestures recognized, "
+                 + "and their timings. It never records text, cursor positions, or key presses.")
+        }
+    }
+
+    /// Tracks the toggle, so the instruction is always the *next* step rather than telling
+    /// someone to turn on what they already turned on (the `dragStyleHelp` idiom).
+    private var recordingHelp: String {
+        if model.isRecordingDiagnostics {
+            return "Recording. Reproduce the problem, then turn this off and attach the log "
+                + "to your bug report."
+        }
+        return "Turn this on, reproduce the problem, then turn it off and attach the log to "
+            + "your bug report. Recording stops on its own after "
+            + "\(model.diagnosticsAutoStopMinutes) minutes."
     }
 
     // MARK: Permission row

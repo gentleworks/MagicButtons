@@ -132,6 +132,9 @@ final class AppModel {
     /// Why recording stopped on its own, or why it couldn't start. `nil` when there's
     /// nothing to say — a user-initiated stop needs no explanation.
     private(set) var diagnosticsNote: String?
+    /// The auto-stop cap, in minutes, read from the session rather than written into the
+    /// UI copy — so what the Status pane promises can't drift from what's enforced.
+    var diagnosticsAutoStopMinutes: Int { Int(diagnostics.limits.maxDuration / 60) }
 
     private(set) var permissionsSnapshot: PermissionsSnapshot
     /// Set when the user grants Accessibility while the app is already running. We retry
