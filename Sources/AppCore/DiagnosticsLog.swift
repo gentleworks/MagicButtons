@@ -68,6 +68,12 @@ public final class DiagnosticsLog {
     /// Where this session is being written — the "Reveal in Finder" target.
     public let fileURL: URL
 
+    /// Bytes handed to the writer so far — what `DiagnosticsSession` caps against. Counted
+    /// on the recording thread, so it leads what's actually on disk by however many rows
+    /// are still in flight; that makes it a safe upper bound to cap on, never an
+    /// under-estimate.
+    public private(set) var bytesWritten = 0
+
     /// Optional tee of the human-readable running commentary. `mb-dev log-conflicts` points
     /// this at `print` for live console feedback; the shipping app leaves it `nil` — the app
     /// has no console, and a menu-bar agent writing to stdout helps nobody.
@@ -104,7 +110,10 @@ public final class DiagnosticsLog {
     public func close() { writer.close() }
 
     private func ms() -> Int { Int((Date().timeIntervalSince(start) * 1000).rounded()) }
-    private func write(_ line: String) { writer.append(line) }
+    private func write(_ line: String) {
+        bytesWritten += line.utf8.count + 1   // + the newline the writer appends
+        writer.append(line)
+    }
     // detail fields never contain a comma (they'd break the column) — separators are `;`/`|`.
     // `swallowed` is blank on rows where consuming isn't a concept (synth/contacts).
     private func row(_ stream: String, _ detail: String, swallowed: Bool? = nil) {
