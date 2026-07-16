@@ -21,40 +21,23 @@ place without building them now.
   recognizer, unlike the still-deferred items below. **Built + HW-verified;** recorded
   in `14-post-v1.md`.
 
+- **Diagnostics mode (in-app troubleshooting log)** — promoted 2026-07-16 right after
+  Feature B, and for its sake: that work's findings existed only because the hardware was
+  instrumented, and its decisive bug was found only by testing on it. **Built +
+  HW-verified;** recorded in `14-post-v1.md` §Diagnostics mode. An opt-in Troubleshooting
+  toggle in Settings → Status writes a four-stream, `hold_active`-tagged CSV to
+  `~/Library/Logs/MagicButtons/`, capped and pruned, recording zones/gestures/timings only
+  — never text or cursor positions — so it's safe to attach to a bug report.
+
+  Two seam notes this roadmap got wrong, corrected there: teeing the *emitted* stream from
+  `AppCoordinator.onGesture` would have been a bug (it fires **pre-policy**, so
+  `hold_active` would claim holds the policy dropped — recording tees at the emitter
+  boundary instead, and `onGesture` becomes its own pre-policy stream); and the physical
+  tee needed no work, having already landed with Feature B as
+  `EventInterceptor.onPhysicalButtonEvent`. **Still deferred:** Feature A (suppress physical
+  clicks), which this pairs with — in v2 candidates below.
+
 ## v2 candidates
-
-- **Diagnostics mode (in-app troubleshooting log)** — ⭐ **probable next feature**, after
-  Feature B lands. An **opt-in** mode that records real interaction to a log the user can
-  attach to a problem report.
-
-  *Why it's near the front:* synthetic reproduction is **harder and less representative
-  than everyday interaction**. The Feature B measurement session (`14-post-v1.md`
-  §Measured findings) made the case: producing clean `tapAndAHalf` collision captures took
-  deliberate effort, and the decisive finding — the straddle — is a timing artifact of
-  *natural* use. When a user reports "drags sometimes drop," in-situ data is the only way
-  to see what actually happened. It also pairs with **Feature A**: if suppression ever
-  ships, in-situ logs are how a stuck-mouse report gets debugged.
-
-  *Seams already in place (most of the work is done):*
-  - `AppCoordinator.onFrame` and `onGesture` are already **optional read-only tees** (the
-    Visualizer uses them). A recorder just sets them.
-  - Physical clicks need one small addition — the coordinator monopolizes
-    `clickSource.onPhysicalClickChange` in `wire()`; expose an optional `onPhysicalClick`
-    tee composed there, same pattern as `onGesture` (~2 lines).
-  - `ConflictLog` (added with `mb-dev log-conflicts`, docs/13) is the reusable basis: a
-    three-stream, `hold_active`-tagged CSV writer. Promote it into `AppCore`.
-
-  *Hard requirement — zero overhead when off:* nil closures, no allocation, no file
-  handle; nothing is installed until the toggle flips. When **on**, buffer rows and flush
-  on a background queue so file I/O can't perturb the very timing being recorded.
-
-  *Privacy:* records event **types, zones, and timings** — no text, no cursor coordinates
-  (position is consumed only to derive a zone), so a log is safe to attach to a bug report.
-  Opt-in and clearly labeled regardless.
-
-  *Still needs its own (small) design pass:* the UI affordance (toggle + "Reveal log" /
-  "Export for bug report"), a log size cap / rotation, and the write location
-  (Application Support).
 
 - **Sparkle beta channel** — a `beta` appcast channel for a tester track (deferred from the
   Sparkle work 2026-07-15; no testers yet). Cheap when needed: app-side
@@ -121,7 +104,7 @@ and were consciously left for later. Kept here so they aren't lost.
 | Future feature | v1 affordance already in place |
 |----------------|-------------------------------|
 | Suppress clicks | active `EventInterceptor` tap (pass-through now) |
-| Diagnostics mode | `AppCoordinator.onFrame`/`onGesture` read-only tees (nil = off, zero cost); `ConflictLog` in `mb-dev` as the recorder |
+| Diagnostics mode | *(shipped — see Graduated)* the `onFrame`/`onGesture` read-only tees and the injected `emitter` all became recording seams (nil = off, zero cost) |
 | Per-app profiles | single policy layer that filters gestures by feature |
 | Multi-finger | `fingerCount` on `ButtonGesture`; frame-level touch sets |
 | More button kinds | `ButtonEmitting` protocol; policy chooses emitter |

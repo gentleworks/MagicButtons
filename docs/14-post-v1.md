@@ -501,6 +501,89 @@ sources to surface once we're logging real collisions. Reasoned so far:
 - HW exit gate: run each measured scenario on the Magic Mouse under **both** drag
   styles; confirm no corrupted drag and no double actuation.
 
+## Diagnostics mode — opt-in troubleshooting log ✅ *(graduated from `10-roadmap.md`; done; HW-verified 2026-07-16 — commits `fde8cd9`, `e26f5e7`, `abb101b`, `ac24f82`, `90492ef`, `fbc1036`, `2f540b7`; 224 tests)*
+
+Promoted straight after de-confliction, and for its sake: that section's measured
+findings only existed because the hardware was instrumented, and scenario #9 was
+found **only** by testing on it. When a user reports "my drag dropped", in-situ data
+is the only way to see what happened — synthetic reproduction is both harder and less
+representative than everyday use. *As built:*
+
+- **The recorder is the one `log-conflicts` already used.** `ConflictLog` → 
+  `AppCore.DiagnosticsLog`, `TappingEmitter` → `EventOutput.TeeingEmitter` (now generic
+  over any `ButtonEmitting`). The streams needed to *build* de-confliction are the ones
+  needed to *explain* it, so the harness and the app write the identical format from the
+  same writer — which keeps `log-conflicts` a real hardware check on the shipping
+  recorder rather than on a near-cousin (docs/13).
+- **Four streams**, one row each, `hold_active`-tagged: `physical`, `gesture`, `synth`,
+  `contacts`. **`gesture` and `synth` are a pair and the gap between them is the
+  diagnosis:** `gesture` is what the recognizer produced (pre-policy, pre-swap — the
+  *finger's* zone), `synth` is what was actually posted. A `gesture` row with no `synth`
+  row is a gesture the policy dropped — "I tapped and nothing happened", a likelier field
+  report than a collision. The two zones disagreeing is a left-handed arrangement.
+- **The roadmap named the wrong seam, and it mattered.** It said to tee `synth` from
+  `AppCoordinator.onGesture`; that fires *pre-policy*, so `hold_active` would have claimed
+  a hold for a gesture the policy dropped — and that column is what the whole collision
+  analysis above pivots on. Recording tees at the **emitter boundary** instead, which
+  needed no coordinator change (`AppCoordinator.init` already takes an injected emitter).
+  `onGesture` earns its place as the separate `gesture` stream, never touching
+  `hold_active`. (The roadmap's other seam note was already stale: the physical tee landed
+  with Feature B as `EventInterceptor.onPhysicalButtonEvent`.)
+- **`AppCore.DiagnosticsSession`** owns the lifecycle — location, naming, caps, pruning —
+  and deliberately knows nothing of the app's object graph: it returns a log and the caller
+  wires the tees. That's what keeps it testable with no hardware and no writes to the real
+  `~/Library/Logs` (inject `directory`, `now`, `pollInterval`).
+- **`~/Library/Logs/MagicButtons/`**, not Application Support: the macOS convention for
+  user-facing diagnostic logs, so Reveal lands somewhere recognizable and Console.app finds
+  it. Writable directly because the app is unsandboxed by necessity (docs/07). Application
+  Support is for data an app needs to function; these are disposable.
+- **Caps stop, they don't truncate** (5 MB / 30 min / keep 5): a log that silently drops its
+  middle is worse than a short one, since the reader can't tell which they hold. Polled, not
+  checked per row, so an *idle* session still stops. The poll is a `Task`, not a `Timer` —
+  a `Timer` is non-Sendable (Swift 6 forbids touching it from a nonisolated `deinit`, and
+  `invalidate()` must run on the installing thread) and a default-mode timer is starved by
+  menu tracking, which for a menu-bar app is exactly when it's in use.
+- **Never in `AppSettings`.** That struct persists to `UserDefaults` and is what
+  Export/Import ships to another Mac, so recording would have stayed on silently across
+  relaunches and followed the user to a second machine. Session-only state on `AppModel`;
+  always starts off.
+- **Fixed location + Reveal, not an `NSSavePanel`** (the Export-settings idiom, docs/09):
+  the toggle must start recording *now*, and a write-as-you-go file survives the force-quit
+  that ends the very stuck-button session worth reading. For the same reason rows are handed
+  to the writer queue **individually, not batched** — batching trades the log's tail for
+  fewer dispatches, and the tail is the point. I/O still leaves the main thread, which is
+  the actual requirement: recording must not perturb the timing it records.
+- **Zero overhead when off:** the frame and gesture tees cost one nil check each (both were
+  already claimed by the visualizer), the other two streams aren't installed at all, and no
+  file, task, or allocation exists until the toggle flips.
+- **UI** — a Troubleshooting section at the bottom of the tab already named *Status &
+  Diagnostics* (docs/09 §Status), where first-run already sends anyone missing a grant, and
+  last within it because recording is the escalation for when every readout looks fine. It
+  reuses two existing idioms: switch + explainer-that-swaps-to-an-orange-note
+  (`launchAtLoginNote`), and explainer-tracks-current-state (`dragStyleHelp`). While
+  recording it names the auto-stop as a **clock time** — at that point the question is "have
+  I got time to reproduce this?", which a deadline answers and a duration makes you compute;
+  it's a fixed instant, so it needs no countdown ticking into the view. The cap figures are
+  read from the session's real limits, so the copy can't drift from what's enforced.
+- **Privacy** (why it's attachable to a public bug report, and stated plainly in the pane):
+  zones, gestures, and timings only. Never text, cursor positions, or key presses — position
+  is consumed only to derive a zone.
+- **Two hazards the tests flushed out:** toggling off and back on inside one second reused
+  the timestamped filename and **truncated the log just recorded** (names now uniquify); and
+  pruning sorts by name, which only tracks chronology while the clock moves forward, so a
+  **backwards jump (NTP) could delete the live file mid-session** (it's excluded explicitly).
+- **Tests:** `DiagnosticsLogTests` (CSV contract — `hold_active`, `swallowed`, the
+  gesture/synth split, flush-on-close), `DiagnosticsSessionTests` (caps against an injected
+  clock, pruning, naming, the auto-stop deadline), `TeeingEmitterTests`, and
+  `DiagnosticsWiringTests` — which pins the *pattern* `AppModel` follows, against the
+  shipping pieces with fakes, including the regression test for the seam choice above
+  (feature off ⇒ recognized but not posted ⇒ `gesture` row, no `synth` row). `swift test`
+  green at **224** (+45). **`AppShell` has no test target**, so `AppModel`'s own wiring rests
+  on `xcodebuild` + the hardware gate — the reason the wiring pattern is pinned in `AppCore`.
+- **Exit ✅ (HW-verified 2026-07-16):** recording toggled on writes a live log to
+  `~/Library/Logs/MagicButtons/`; Reveal selects it; all four streams land; the auto-stop
+  time reads correctly. Layout confirmed in the real pane.
+
 ## In progress / next
 
 Sparkle is **DONE (HW-verified 2026-07-15)**: in-app integration, EdDSA keys, and the full
@@ -510,14 +593,21 @@ Release** for the hand-download) are built, a real notarized build 3 is **live**
 2 → 3 auto-update **installed cleanly on hardware**. The
 beta channel (S4) is deferred to `10-roadmap.md`.
 
-**Click/drag de-confliction is DONE + HW-verified 2026-07-16** (section above) —
-unreleased; version bumped to **1.1.1** in anticipation, no release cut yet. Release notes
-are written ad hoc at cut time (`release.sh --notes FILE`); nothing pending is tracked.
+**Click/drag de-confliction** and **diagnostics mode** are both DONE + HW-verified
+2026-07-16 (sections above) — unreleased; version bumped to **1.1.1** in anticipation, no
+release cut yet. Release notes are written ad hoc at cut time (`release.sh --notes FILE`)
+and are not tracked in the repo.
 
-**Next up: diagnostics mode** — an opt-in in-app troubleshooting log, promoted to ⭐
-probable-next-feature in `10-roadmap.md` after this session showed how much more the
-hardware teaches than reasoning does (scenario #9 was found only by testing). Most seams
-already exist; `ConflictLog` in `mb-dev` is the recorder. Other candidates live in
-`10-roadmap.md` (e.g. deferred-click timing, `clickTiming = .deferred`, specified in
-docs/03 §Click timing; and Feature A, suppress physical clicks, deferred with a full
-design capture in `05` §Suppress physical clicks).
+**Next up: release notes in the Sparkle appcast.** The appcast carries none today, so the
+update dialog shows an empty body — not a regression (1.1.0 shipped that way), but 1.1.1 is
+the first release that *changes clicking behavior*, so silent notes cost something.
+`generate_appcast` auto-detects a notes file whose basename matches the archive, and
+`--embed-release-notes` forces embedding rather than linking (no extra URL, no 404 risk).
+The wrinkle is that the DMG basename carries the build number, so a hand-named file goes
+stale on every bump — `release.sh` should copy the canonical notes to
+`updates/<DMG basename>.md` at cut time so one source feeds both the Codeberg Release and
+the appcast.
+
+Other candidates live in `10-roadmap.md` (e.g. deferred-click timing, `clickTiming =
+.deferred`, specified in docs/03 §Click timing; and Feature A, suppress physical clicks,
+deferred with a full design capture in `05` §Suppress physical clicks).
