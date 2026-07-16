@@ -70,7 +70,9 @@ public final class DiagnosticsSession {
     private static let fileExtension = "csv"
 
     private let directory: URL
-    private let limits: Limits
+    /// Public so the UI can state the caps it's actually running under rather than
+    /// hardcoding numbers that drift out of sync with them.
+    public let limits: Limits
     private let now: () -> Date
     private let pollInterval: TimeInterval
     private var pollTask: Task<Void, Never>?

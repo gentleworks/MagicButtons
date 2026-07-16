@@ -42,6 +42,19 @@ final class AppModel {
     @ObservationIgnored private let loginItem = LoginItemController()
     @ObservationIgnored private let deviceMonitor: DeviceMonitor
     @ObservationIgnored private let store: SettingsStore
+    /// The event tap, retained so recording can claim its physical-click tee. The
+    /// coordinator consumes `onPhysicalClickChange` (it feeds the recognizer);
+    /// `onPhysicalButtonEvent` is separate and fires *after* the swallow decision, so the
+    /// log can record whether de-confliction consumed each click (docs/14).
+    @ObservationIgnored private let interceptor: EventInterceptor
+    /// The emitter the pipeline posts through, retained so recording can claim its tee.
+    @ObservationIgnored private let emitter: TeeingEmitter
+    /// Recording lifecycle — file location, caps, pruning. **Session-only, by design:**
+    /// this deliberately isn't in `AppSettings`, which persists to `UserDefaults` and is
+    /// what Export/Import ships to another Mac. Recording therefore always starts off, and
+    /// can neither be left on silently across relaunches nor follow the user to a second
+    /// machine (docs/10 §Diagnostics mode).
+    @ObservationIgnored private let diagnostics = DiagnosticsSession()
     /// Reads the Magic Mouse secondary-click side from the system so our left/right tap
     /// zones follow the user's mouse handedness. Consulted at start and on the poll.
     @ObservationIgnored private let secondaryClickReader = SecondaryClickReader()
@@ -99,6 +112,27 @@ final class AppModel {
             setLaunchAtLogin(newValue)
         }
     }
+    /// The Troubleshooting toggle (docs/10 §Diagnostics mode). Starting can fail (an
+    /// unwritable log directory), so this reads the mirror of what actually happened
+    /// rather than the requested value — a toggle that springs back is the honest
+    /// outcome, with `diagnosticsNote` saying why.
+    var isRecordingDiagnostics: Bool {
+        get { diagnosticsIsRecording }
+        set {
+            guard newValue != diagnosticsIsRecording else { return }
+            if newValue { startDiagnostics() } else { diagnostics.stop() }
+        }
+    }
+    /// Observable mirror of `DiagnosticsSession.isRecording` (the session is a plain
+    /// object). Stored, so the Status pane re-renders when a cap stops recording on its own.
+    private var diagnosticsIsRecording = false
+    /// The most recent session's log, live or finished — the Reveal target. `nil` until
+    /// one has been recorded this launch.
+    private(set) var diagnosticsLogURL: URL?
+    /// Why recording stopped on its own, or why it couldn't start. `nil` when there's
+    /// nothing to say — a user-initiated stop needs no explanation.
+    private(set) var diagnosticsNote: String?
+
     private(set) var permissionsSnapshot: PermissionsSnapshot
     /// Set when the user grants Accessibility while the app is already running. We retry
     /// the event tap in place (`coordinator.retryStream`); if that still can't install
@@ -151,8 +185,14 @@ final class AppModel {
         // (armed by the emitter). Wire the emitter to it so `press`/`release` toggle
         // the rewrite (docs/05 §Press/release); the emitter holds it weakly.
         let interceptor = EventInterceptor()
-        let emitter = CGEventEmitter()
-        emitter.dragPromoter = interceptor
+        let cgEmitter = CGEventEmitter()
+        cgEmitter.dragPromoter = interceptor
+        // Wrapped so diagnostics can record what was *emitted* — after the policy filter
+        // and the secondary-click swap. Both are retained (they'd otherwise be reachable
+        // only from inside the coordinator) because their tees are what recording installs.
+        let emitter = TeeingEmitter(cgEmitter)
+        self.interceptor = interceptor
+        self.emitter = emitter
         self.coordinator = AppCoordinator(
             source: source,
             clickSource: interceptor,
@@ -175,6 +215,9 @@ final class AppModel {
             guard let self else { return }
             self.visualizer.update(frame)
             self.lastFrameAt = ProcessInfo.processInfo.systemUptime
+            // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one
+            // check per frame — the other two streams aren't even installed.
+            self.diagnostics.log?.contacts(frame)
         }
         // Flash recognized gestures in the visualizer (feedback while tuning tap /
         // double-tap thresholds, docs/09). Map the recognizer's `ButtonGesture` to the
@@ -188,6 +231,16 @@ final class AppModel {
             case let .holdEnded(zone):    recognized = .holdEnded(zone)
             }
             self.visualizer.register(recognized)
+        }
+        // Every ending lands here — a user stop as much as a cap firing — so the tees are
+        // torn down in exactly one place and can't be left installed by a path we forgot.
+        diagnostics.onStop = { [weak self] reason in
+            guard let self else { return }
+            self.emitter.onEvent = nil
+            self.interceptor.onPhysicalButtonEvent = nil
+            self.diagnosticsIsRecording = false
+            self.diagnosticsLogURL = self.diagnostics.lastFileURL
+            self.diagnosticsNote = self.explanation(for: reason)
         }
         permissions.onChange = { [weak self] snapshot in self?.permissionsSnapshot = snapshot }
         deviceMonitor.onChange = { [weak self] in
@@ -214,6 +267,9 @@ final class AppModel {
     /// safety stop on quit.
     func stop() {
         stopPolling()
+        // Close the log on a clean quit so its tail is on disk. An *unclean* exit is
+        // covered too — rows are written as they happen, not batched.
+        diagnostics.stop()
         deviceMonitor.stop()
         coordinator.stop()
         mirrorStatus()
@@ -358,6 +414,53 @@ final class AppModel {
         settings = new
         coordinator.apply(new)
         visualizer.layout = new.zones
+    }
+
+    // MARK: Diagnostics recording (docs/10 §Diagnostics mode)
+
+    /// Open a log and point the three streams at it. Nothing is installed until here — the
+    /// toggle being off costs a nil closure and nothing more.
+    private func startDiagnostics() {
+        guard let log = diagnostics.start(layout: settings.zones) else {
+            diagnosticsNote = "Couldn’t create a log in "
+                + DiagnosticsSession.defaultDirectory.path + "."
+            return
+        }
+        // Captured weakly on purpose: the session owns the log and clears it on stop, so a
+        // tee can never outlive its session even if teardown were somehow missed. Frames
+        // come through the coordinator's existing tee (see `init`).
+        emitter.onEvent = { [weak log] event in log?.synth(event) }
+        interceptor.onPhysicalButtonEvent = { [weak log] type, button, swallowed in
+            log?.physical(type: type, buttonNumber: button, wasSwallowed: swallowed)
+        }
+        diagnosticsIsRecording = true
+        diagnosticsLogURL = log.fileURL
+        diagnosticsNote = nil
+    }
+
+    /// Show the log in the Finder, ready to drag onto a bug report. A save panel would be
+    /// the established idiom here (see `exportSettings`), but recording writes as it goes
+    /// to a fixed location instead: the toggle has to start recording *now*, and a log on
+    /// disk survives the force-quit that ends the very stuck-button session worth reading.
+    func revealDiagnosticsLog() {
+        guard let url = diagnosticsLogURL,
+              FileManager.default.fileExists(atPath: url.path) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Plain-language reason a session ended on its own. A user-initiated stop says
+    /// nothing — they know why it stopped.
+    private func explanation(for reason: DiagnosticsStopReason) -> String? {
+        switch reason {
+        case .user:
+            return nil
+        case .timeLimit:
+            let minutes = Int(diagnostics.limits.maxDuration / 60)
+            return "Recording stopped automatically after \(minutes) minutes."
+        case .sizeLimit:
+            let mb = diagnostics.limits.maxBytes / 1_000_000
+            return "Recording stopped automatically — the log reached \(mb) MB."
+        }
     }
 
     // MARK: Settings transfer (docs/09 §Persistence & sync)
