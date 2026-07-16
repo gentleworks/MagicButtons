@@ -124,6 +124,10 @@ the notarized cdhash). The local-dev signing default in `AppShell/Signing.xcconf
   Then `scripts/release.sh` runs the full pipeline; `scripts/release.sh --skip-notarize`
   does everything except the Apple round-trip (for a local dry run).
 - Output lands in `dist/` (gitignored): `MagicButtons.app` + `MagicButtons.dmg`.
+- **Two public download channels, one command.** `scripts/release.sh --publish` pushes the
+  notarized DMG to both the Sparkle feed (Codeberg Pages) **and** a **Codeberg Release** (git
+  tag + notes + the same DMG), so the auto-updater and the hand-download never drift apart. See
+  docs/14 §Sparkle for the mechanics and the one-time `MB_CODEBERG_TOKEN` setup.
 - **`CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO`** in the build: a plain `xcodebuild build`
   (vs archive) injects `com.apple.security.get-task-allow` (debug "attach a debugger"),
   which notarization rejects as a critical error. This disables that injection; the

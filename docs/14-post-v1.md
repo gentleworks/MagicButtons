@@ -245,8 +245,20 @@ key out-of-band.
   ../MagicButtons-pages`, overridable via `MB_PAGES_WORKTREE`). `./scripts/release.sh
   --publish` copies `updates/`'s appcast + versioned DMGs into that worktree, commits, and
   pushes. It **refuses to combine with `--skip-notarize`** (never publish an un-notarized
-  DMG) and no-ops cleanly when nothing changed. The full release loop is now one command:
-  bump `CURRENT_PROJECT_VERSION` → `./scripts/release.sh --publish`.
+  DMG) and no-ops cleanly when nothing changed.
+- **Codeberg Release mirror (`--publish`).** So the hand-download stays byte-identical to what
+  Sparkle serves, `--publish` also cuts a **Codeberg Release** via the Forgejo REST API (Codeberg
+  runs Forgejo; `gh` is GitHub-only). It tags the released source commit `v<short>-<build>` (e.g.
+  `v1.1.0-4`), pushes the tag, creates the release (notes from `--notes FILE`, else a default
+  body), and uploads the *same* notarized/stapled versioned DMG from `updates/` as the release
+  asset — the identical bytes the appcast enclosure points at. Sparkle is untouched: it still
+  reads only the Pages appcast/enclosure URLs. Needs a token with the `repository:write` scope in
+  `MB_CODEBERG_TOKEN` (kept in `scripts/release.local.env`, gitignored); without it the step is
+  skipped with a warning so Pages still publishes. Idempotent — if the tag's release already
+  exists it's left untouched (safe to re-run). Repo defaults to `anguiano/MagicButtons`,
+  overridable via `MB_CODEBERG_REPO`.
+- The full release loop is now one command: bump `CURRENT_PROJECT_VERSION` →
+  `./scripts/release.sh --publish` (optionally `--notes RELEASE_NOTES.md` for the Codeberg body).
 
 **Shipped live:** build **1.1.0 (3)** was built, re-signed, **notarized** (submission
 `78823f24…` Accepted), stapled, appcast-signed, and **published to Codeberg Pages** via
@@ -273,8 +285,9 @@ and the running build discovered build 3, verified its EdDSA signature, download
 
 Sparkle is **DONE (HW-verified 2026-07-15)**: in-app integration, EdDSA keys, and the full
 release pipeline (build-number forcing function → re-signed helpers → notarize with
-status-check → signed appcast → `--publish` to Codeberg Pages) are built, a real notarized
-build 3 is **live**, and a build 2 → 3 auto-update **installed cleanly on hardware**. The
+status-check → signed appcast → `--publish` to Codeberg Pages **+ a mirrored Codeberg
+Release** for the hand-download) are built, a real notarized build 3 is **live**, and a build
+2 → 3 auto-update **installed cleanly on hardware**. The
 beta channel (S4) is deferred to `10-roadmap.md`. Nothing else committed to build right now;
 candidate features live in `10-roadmap.md` (nearest: deferred-click timing,
 `clickTiming = .deferred`, specified in docs/03 §Click timing).
