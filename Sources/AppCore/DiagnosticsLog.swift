@@ -49,9 +49,10 @@ public enum DiagnosticsLogError: Error {
 /// `gesture` and `synth` are a deliberate pair, and the **gap between them is the point**:
 /// `gesture` is what the recognizer saw, `synth` is what actually got posted. A `gesture`
 /// row with no matching `synth` row is a gesture the policy dropped — which is exactly the
-/// "I tapped and nothing happened" report. `mb-dev log-conflicts` wires only three of the
-/// streams (docs/13 documents it as a three-stream Feature B instrument, and docs/14's
-/// findings are written against that); the shipping diagnostics mode wires all four.
+/// "I tapped and nothing happened" report.
+///
+/// The shipping diagnostics mode and `mb-dev log-conflicts` both wire all four streams, so
+/// there is one format to read and one parser to write.
 ///
 /// Promoted out of the `mb-dev log-conflicts` harness (docs/13, docs/14 §Click/drag
 /// de-confliction), which measured Feature B, into the recorder behind the shipping

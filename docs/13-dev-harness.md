@@ -156,10 +156,20 @@ timestamped file by default, or to `path` if given.
 **Feature B** (click/drag de-confliction, `14-post-v1.md`). It runs the *real*
 shipping pipeline — same recognizer and `CGEventEmitter`, with drag promotion armed
 through the same `EventInterceptor` that reports physical clicks — and writes a single
-timestamped CSV interleaving **three** streams: physical clicks (`down`/`up`),
-synthetic emissions (`press`/`release`/`click`), and contact-set changes. Every row
-carries a `hold_active` column, so a physical event that lands during a synthetic drag
-(the core collision) is a one-column filter, and the end-of-run summary counts them.
+timestamped CSV interleaving **four** streams: physical clicks (`down`/`up`), recognized
+gestures (`click`/`holdBegan`/`holdEnded`), synthetic emissions
+(`press`/`release`/`click`), and contact-set changes. Every row carries a `hold_active`
+column, so a physical event that lands during a synthetic drag (the core collision) is a
+one-column filter, and the end-of-run summary counts them.
+
+`gesture` and `synth` are a pair, and the gap between them is the diagnosis: `gesture` is
+what the recognizer produced — **before** the policy filter and before the secondary-click
+swap, so its zone is where the *finger* was — while `synth` is what actually got posted. A
+`gesture` row with no matching `synth` row is a gesture the policy dropped ("I tapped and
+nothing happened"); the two zones disagreeing is a left-handed mouse arrangement. Only
+`synth` moves `hold_active`, since a `holdBegan` the policy drops presses nothing. This is
+the same writer the shipping diagnostics mode uses (`AppCore.DiagnosticsLog`), so both
+produce the identical format.
 Physical rows also carry a **`swallowed`** column — whether de-confliction *consumed*
 the event (docs/14) — so the fix is provable from the CSV rather than inferred: a
 squeeze that begins inside a drag should read `hold_active=1, swallowed=1` for **both**

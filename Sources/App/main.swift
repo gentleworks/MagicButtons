@@ -68,10 +68,12 @@ func printUsage() {
       log-conflicts [seconds] [tap|hold] [path]
                             Feature B measurement (docs/14 §Click/drag de-
                             confliction): run the real pipeline with drag promotion
-                            wired, and log a timestamped CSV of three streams —
-                            physical clicks, synthetic press/release/click, and
-                            contact-set changes — each tagged with whether a
-                            synthetic hold was active. Reproduce the collisions
+                            wired, and log a timestamped CSV of four streams —
+                            physical clicks, recognized gestures, synthetic
+                            press/release/click, and contact-set changes — each
+                            tagged with whether a synthetic hold was active. The
+                            same format the app's diagnostics mode writes.
+                            Reproduce the collisions
                             (squeeze mid-drag, race press vs onset, click vs tap);
                             the summary counts physical events that hit during a
                             synthetic drag. `tap` = tapAndAHalf (default), `hold` =
@@ -511,11 +513,15 @@ func printCalibrationSummary(_ s: ContactSummary, config: GestureConfig,
 /// Feature B measurement instrument (docs/14 §Click/drag de-confliction). Runs the
 /// **real** shipping pipeline — `MultitouchSource` → recognizer → `CGEventEmitter` with
 /// drag promotion armed through the same `EventInterceptor` that feeds physical-click
-/// state — and writes a unified, timestamped CSV of three streams (physical clicks,
-/// synthetic press/release/click, contact-set changes), each tagged with whether a
-/// synthetic hold was active. Unlike `verify-gesture` it records the interleaving to a
-/// file and wires the drag promoter (so moves genuinely drag); unlike `log-gestures` it
-/// posts real events, so a real drag exists to collide with.
+/// state — and writes a unified, timestamped CSV of four streams (physical clicks,
+/// recognized gestures, synthetic press/release/click, contact-set changes), each tagged
+/// with whether a synthetic hold was active. Unlike `verify-gesture` it records the
+/// interleaving to a file and wires the drag promoter (so moves genuinely drag); unlike
+/// `log-gestures` it posts real events, so a real drag exists to collide with.
+///
+/// Writes through the same `DiagnosticsLog` as the app's diagnostics mode, wired the same
+/// way — one format, one parser, and this harness stays the hardware check on the recorder
+/// the app ships.
 ///
 /// Pick the drag style to exercise both Feature B paths:
 ///   `log-conflicts [seconds] [tap|hold] [path]`  (tap = tapAndAHalf, default; hold = pressAndHold)
@@ -586,6 +592,7 @@ func runLogConflicts(secondsArg: String?, styleArg: String?, pathArg: String?) -
     let coordinator = AppCoordinator(
         source: source, clickSource: clickSource, emitter: emitter, settings: settings)
     coordinator.onFrame = { [log] in log.contacts($0) }
+    coordinator.onGesture = { [log] in log.gesture($0) }
 
     // Re-enumerate mice on any HID attach/detach (callback fires on the main run loop).
     let monitor = DeviceMonitor()
