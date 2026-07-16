@@ -292,3 +292,68 @@ private final class DragPromoterSpy: DragPromoting {
         #expect(spy.endCount == 0)
     }
 }
+
+// MARK: - TeeingEmitter (diagnostics recording seam)
+
+/// Records emitted buttons instead of posting them.
+private final class RecordingEmitter: ButtonEmitting {
+    private(set) var calls: [String] = []
+    func click(_ zone: MouseZone, count: Int) { calls.append("click(\(zone),\(count))") }
+    func press(_ zone: MouseZone) { calls.append("press(\(zone))") }
+    func release(_ zone: MouseZone) { calls.append("release(\(zone))") }
+}
+
+@Suite struct TeeingEmitterTests {
+    @Test func forwardsEveryEmissionToTheWrappedEmitter() {
+        let inner = RecordingEmitter()
+        let emitter = TeeingEmitter(inner)
+
+        emitter.click(.left, count: 2)
+        emitter.press(.middle)
+        emitter.release(.middle)
+
+        #expect(inner.calls == ["click(left,2)", "press(middle)", "release(middle)"])
+    }
+
+    @Test func teesEachEmissionWithItsZoneAndCount() {
+        let emitter = TeeingEmitter(RecordingEmitter())
+        var teed: [SynthEvent] = []
+        emitter.onEvent = { teed.append($0) }
+
+        emitter.click(.right, count: 3)
+        emitter.press(.left)
+        emitter.release(.left)
+
+        #expect(teed.count == 3)
+        guard case let .click(zone, count) = teed[0] else { Issue.record("not a click"); return }
+        #expect(zone == .right)
+        #expect(count == 3)
+        guard case .press(.left) = teed[1] else { Issue.record("not a left press"); return }
+        guard case .release(.left) = teed[2] else { Issue.record("not a left release"); return }
+    }
+
+    /// The tee must run *before* the inner emitter, so a recorder's view of "a button is
+    /// down" can never lag the button actually being posted.
+    @Test func teesBeforeForwarding() {
+        let inner = RecordingEmitter()
+        let emitter = TeeingEmitter(inner)
+        var innerCallsAtTeeTime: Int?
+        emitter.onEvent = { _ in innerCallsAtTeeTime = inner.calls.count }
+
+        emitter.press(.left)
+
+        #expect(innerCallsAtTeeTime == 0)
+        #expect(inner.calls.count == 1)
+    }
+
+    /// Recording off is the steady state: a nil tee costs one nil-check and changes nothing.
+    @Test func passesThroughWhenNoTeeIsInstalled() {
+        let inner = RecordingEmitter()
+        let emitter = TeeingEmitter(inner)
+
+        emitter.press(.left)
+        emitter.release(.left)
+
+        #expect(inner.calls == ["press(left)", "release(left)"])
+    }
+}

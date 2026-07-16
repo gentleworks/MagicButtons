@@ -508,100 +508,6 @@ func printCalibrationSummary(_ s: ContactSummary, config: GestureConfig,
 
 // MARK: - log-conflicts (Feature B measurement — docs/14 §Click/drag de-confliction)
 
-/// One synthetic emission, teed for the conflict timeline before it's posted.
-enum SynthEvent { case press(MouseZone), release(MouseZone), click(MouseZone, Int) }
-
-/// Wraps the real `CGEventEmitter` (so events actually post and a genuine drag exists to
-/// collide with) and tees each `press`/`release`/`click` to the conflict log first.
-final class TappingEmitter: ButtonEmitting {
-    private let inner: CGEventEmitter
-    var onEvent: ((SynthEvent) -> Void)?
-    init(_ inner: CGEventEmitter) { self.inner = inner }
-    func click(_ zone: MouseZone, count: Int) { onEvent?(.click(zone, count)); inner.click(zone, count: count) }
-    func press(_ zone: MouseZone)   { onEvent?(.press(zone));   inner.press(zone) }
-    func release(_ zone: MouseZone) { onEvent?(.release(zone)); inner.release(zone) }
-}
-
-/// Shared timeline accumulator: one CSV row per event across three streams (physical
-/// clicks, synthetic press/release/click, contact-set changes), each stamped with
-/// ms-since-start, whether a synthetic hold was active, and — for physical rows —
-/// whether de-confliction **consumed** the event. So a mid-drag squeeze is a one-column
-/// filter (`hold_active = 1`) and the fix's effect is the next column over
-/// (`swallowed = 1`). A reference type: every stream's closure marshals to main, so all
-/// mutation lands on one thread.
-final class ConflictLog {
-    private let handle: FileHandle
-    private let start = Date()
-    private let layout: ZoneLayout
-    private var holdActive = false
-    private var lastContactKey = ""
-
-    private(set) var physicalDowns = 0
-    private(set) var physicalUps = 0
-    private(set) var synthPresses = 0
-    private(set) var synthReleases = 0
-    private(set) var synthClicks = 0
-    /// Physical transitions that landed while a synthetic hold was active — the collisions.
-    private(set) var collisions = 0
-    /// Physical events de-confliction consumed (docs/14 §Click/drag de-confliction).
-    private(set) var swallowed = 0
-    /// Physical events that reached the app while a hold was active — i.e. collisions we
-    /// did **not** swallow. Expected to be the straddle's leaked pair, never a squeeze
-    /// that began inside the drag.
-    private(set) var leakedDuringHold = 0
-
-    init(handle: FileHandle, layout: ZoneLayout) {
-        self.handle = handle
-        self.layout = layout
-        write("t_ms,stream,detail,hold_active,swallowed")
-    }
-
-    private func ms() -> Int { Int((Date().timeIntervalSince(start) * 1000).rounded()) }
-    private func write(_ line: String) { handle.write(Data((line + "\n").utf8)) }
-    // detail fields never contain a comma (they'd break the column) — separators are `;`/`|`.
-    // `swallowed` is blank on rows where consuming isn't a concept (synth/contacts).
-    private func row(_ stream: String, _ detail: String, swallowed: Bool? = nil) {
-        let s = swallowed.map { $0 ? "1" : "0" } ?? ""
-        write("\(ms()),\(stream),\(detail),\(holdActive ? 1 : 0),\(s)")
-    }
-
-    func physical(type: CGEventType, buttonNumber: Int64, wasSwallowed: Bool) {
-        let isDown = type == .leftMouseDown || type == .rightMouseDown || type == .otherMouseDown
-        if isDown { physicalDowns += 1 } else { physicalUps += 1 }
-        if wasSwallowed { swallowed += 1 }
-        if holdActive {
-            collisions += 1
-            if !wasSwallowed { leakedDuringHold += 1 }
-        }
-        row("physical", "\(isDown ? "down" : "up")(btn\(buttonNumber))", swallowed: wasSwallowed)
-        let during = holdActive ? "  ⚠︎ DURING synthetic drag" : ""
-        let verdict = wasSwallowed ? "  → SWALLOWED" : ""
-        print("  [\(ms())ms] physical \(isDown ? "down" : "up") btn\(buttonNumber)\(during)\(verdict)")
-    }
-
-    func synth(_ e: SynthEvent) {
-        switch e {
-        case let .press(z):
-            holdActive = true; synthPresses += 1
-            row("synth", "press(\(z))"); print("  [\(ms())ms] synth press(\(z))  → drag begins")
-        case let .release(z):
-            holdActive = false; synthReleases += 1
-            row("synth", "release(\(z))"); print("  [\(ms())ms] synth release(\(z))  → drag ends")
-        case let .click(z, n):
-            synthClicks += 1
-            row("synth", "click(\(z);\(n))"); print("  [\(ms())ms] synth click(\(z), \(n))")
-        }
-    }
-
-    func contacts(_ touches: [SurfaceTouch]) {
-        let zones = touches.map { "\(layout.zone(for: $0.position))" }.sorted().joined(separator: "|")
-        let key = "\(touches.count):\(zones)"
-        guard key != lastContactKey else { return }   // log only when the contact set changes
-        lastContactKey = key
-        row("contacts", "n=\(touches.count) [\(zones)]")
-    }
-}
-
 /// Feature B measurement instrument (docs/14 §Click/drag de-confliction). Runs the
 /// **real** shipping pipeline — `MultitouchSource` → recognizer → `CGEventEmitter` with
 /// drag promotion armed through the same `EventInterceptor` that feeds physical-click
@@ -644,15 +550,20 @@ func runLogConflicts(secondsArg: String?, styleArg: String?, pathArg: String?) -
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
         return "conflicts-\(f.string(from: Date())).csv"
     }()
-    FileManager.default.createFile(atPath: path, contents: nil)
-    guard let handle = FileHandle(forWritingAtPath: path) else {
-        print("error: could not open \(path) for writing."); return 1
-    }
-    defer { try? handle.close() }
 
     var settings = AppSettings()
     settings.gestures.dragStyle = style
-    let log = ConflictLog(handle: handle, layout: settings.zones)
+
+    let log: DiagnosticsLog
+    do {
+        log = try DiagnosticsLog(
+            fileURL: URL(fileURLWithPath: path), layout: settings.zones)
+    } catch {
+        print("error: could not open \(path) for writing."); return 1
+    }
+    defer { log.close() }
+    // The harness has a console; the shipping app leaves this nil.
+    log.onConsoleLine = { print($0) }
 
     // One EventInterceptor does double duty (physical-click state *and* drag promotion),
     // exactly as the shipping app wires it — so moves actually drag and a real drag exists
@@ -667,7 +578,9 @@ func runLogConflicts(secondsArg: String?, styleArg: String?, pathArg: String?) -
 
     let cgEmitter = CGEventEmitter()
     cgEmitter.dragPromoter = clickSource
-    let emitter = TappingEmitter(cgEmitter)
+    // Tee at the emitter boundary — post-policy, post secondary-click swap — so the
+    // timeline's `hold_active` column tracks buttons that were really down.
+    let emitter = TeeingEmitter(cgEmitter)
     emitter.onEvent = { [log] in log.synth($0) }
 
     let coordinator = AppCoordinator(
