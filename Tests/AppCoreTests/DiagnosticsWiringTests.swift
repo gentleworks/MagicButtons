@@ -40,6 +40,7 @@ import EventOutput
             // when off; the emitter tee is installed only while recording, and torn down on
             // every ending through `onStop`.
             coordinator.onFrame = { [session] frame in session.log?.contacts(frame) }
+            coordinator.onGesture = { [session] gesture in session.log?.gesture(gesture) }
             session.onStop = { [emitter] _ in emitter.onEvent = nil }
             coordinator.start()
         }
@@ -108,25 +109,39 @@ import EventOutput
         #expect(rows[press!].hasSuffix(",1,"))
     }
 
-    /// The reason recording tees at the emitter and not `AppCoordinator.onGesture`: with the
-    /// feature off, the gesture is still *recognized* but no button is *posted*. Recording
-    /// from the pre-policy tee would log a hold that never happened — and `hold_active` is
-    /// what the whole de-confliction analysis reads.
-    @Test func aGestureThePolicyBlockedIsNotRecordedAsAnEmission() async {
+    /// Why the two streams are separate, and the case they exist to explain: with the
+    /// feature off, the gesture is still *recognized* but no button is *posted*. The log
+    /// must show a `gesture` row and no `synth` row — that pairing is the "I tapped and
+    /// nothing happened" report. Recording only from the pre-policy tee would instead claim
+    /// a hold that never happened, and `hold_active` is what the de-confliction analysis
+    /// reads.
+    @Test func aGestureThePolicyBlockedIsRecordedButNotAsAnEmission() async {
         var settings = AppSettings()
         settings.features.masterEnabled = false
         let rig = Rig(settings: settings); defer { rig.cleanUp() }
-
-        // The pre-policy tee proves the gesture really was recognized...
-        var recognized: [ButtonGesture] = []
-        rig.coordinator.onGesture = { recognized.append($0) }
         rig.startRecording()
 
         await rig.feed(tapFrames(x: 0.5))
 
-        #expect(!recognized.isEmpty)
-        #expect(rig.spy.clicks.isEmpty)   // ...and that nothing was posted.
-        #expect(!rig.recordedRows().contains { $0.contains(",synth,") })
+        let rows = rig.recordedRows()
+        #expect(rig.spy.clicks.isEmpty)                                  // nothing posted
+        #expect(rows.contains { $0.contains("gesture,click(middle;1)") })  // but recognized
+        #expect(!rows.contains { $0.contains(",synth,") })
+    }
+
+    /// The pair agreeing is the ordinary case: recognized, then posted.
+    @Test func anAllowedGestureIsRecordedOnBothStreams() async {
+        let rig = Rig(); defer { rig.cleanUp() }
+        rig.startRecording()
+
+        await rig.feed(tapFrames(x: 0.5))
+
+        let rows = rig.recordedRows()
+        let gesture = rows.firstIndex { $0.contains("gesture,click(middle;1)") }
+        let synth = rows.firstIndex { $0.contains("synth,click(middle;1)") }
+        #expect(gesture != nil)
+        #expect(synth != nil)
+        #expect(gesture! < synth!)   // recognized before posted — the tee order
     }
 
     /// Off is the steady state: after a stop, the streams must go quiet — no rows, no

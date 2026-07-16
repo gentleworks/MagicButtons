@@ -152,6 +152,46 @@ import EventOutput
         #expect(try rows(of: log, at: url)[2].contains("click(right;2)"))
     }
 
+    // MARK: Gesture stream (pre-policy)
+
+    @Test func recordsEachRecognizedGestureInTheRecognizerVocabulary() throws {
+        let (log, url) = try makeLog()
+        log.gesture(.click(zone: .left, count: 2))
+        log.gesture(.holdBegan(zone: .middle))
+        log.gesture(.holdEnded(zone: .middle))
+
+        let written = Array(try rows(of: log, at: url).dropFirst())
+        #expect(written.count == 3)
+        #expect(written[0].contains("gesture,click(left;2)"))
+        #expect(written[1].contains("gesture,holdBegan(middle)"))
+        #expect(written[2].contains("gesture,holdEnded(middle)"))
+    }
+
+    /// The load-bearing invariant: `hold_active` must track buttons that were really down.
+    /// A `holdBegan` the policy goes on to drop pressed nothing, so recognizing one must
+    /// not open a hold — only a `synth` press may.
+    @Test func aRecognizedHoldDoesNotOpenTheHoldColumn() throws {
+        let (log, url) = try makeLog()
+        log.gesture(.holdBegan(zone: .left))
+        log.physical(type: .leftMouseDown, buttonNumber: 0, wasSwallowed: false)
+
+        #expect(log.collisions == 0)
+        let physicalRow = try rows(of: log, at: url)[2]
+        #expect(physicalRow.contains(",0,0"))   // hold_active=0
+    }
+
+    /// Recognized and posted are different facts; both belong in the timeline, and the
+    /// gap between them is the diagnosis.
+    @Test func theGestureAndSynthStreamsAreRecordedIndependently() throws {
+        let (log, url) = try makeLog()
+        log.gesture(.click(zone: .left, count: 1))   // recognized...
+        log.synth(.click(.right, 1))    // ...and posted as the *other* button (left-handed)
+
+        let written = Array(try rows(of: log, at: url).dropFirst())
+        #expect(written[0].contains("gesture,click(left;1)"))
+        #expect(written[1].contains("synth,click(right;1)"))
+    }
+
     // MARK: Contacts stream
 
     @Test func logsAContactRowOnlyWhenTheContactSetChanges() throws {

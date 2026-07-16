@@ -231,6 +231,10 @@ final class AppModel {
             case let .holdEnded(zone):    recognized = .holdEnded(zone)
             }
             self.visualizer.register(recognized)
+            // Gesture stream, when recording. Pre-policy on purpose — paired with the
+            // emitter's `synth` rows, a gesture with no emission is one the policy dropped,
+            // which is the "I tapped and nothing happened" report.
+            self.diagnostics.log?.gesture(gesture)
         }
         // Every ending lands here — a user stop as much as a cap firing — so the tees are
         // torn down in exactly one place and can't be left installed by a path we forgot.

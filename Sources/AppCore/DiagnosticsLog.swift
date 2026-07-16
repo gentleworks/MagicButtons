@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import TouchKit
+import GestureEngine
 import EventOutput
 
 /// Owns the log file and performs every write on one serial background queue, so the
@@ -38,12 +39,19 @@ public enum DiagnosticsLogError: Error {
     case couldNotOpen(URL)
 }
 
-/// Shared timeline accumulator: one CSV row per event across three streams (physical
-/// clicks, synthetic press/release/click, contact-set changes), each stamped with
-/// ms-since-start, whether a synthetic hold was active, and — for physical rows —
-/// whether de-confliction **consumed** the event. So a mid-drag squeeze is a one-column
-/// filter (`hold_active = 1`) and the fix's effect is the next column over
+/// Shared timeline accumulator: one CSV row per event across four streams (physical
+/// clicks, recognized gestures, synthetic press/release/click, contact-set changes), each
+/// stamped with ms-since-start, whether a synthetic hold was active, and — for physical
+/// rows — whether de-confliction **consumed** the event. So a mid-drag squeeze is a
+/// one-column filter (`hold_active = 1`) and the fix's effect is the next column over
 /// (`swallowed = 1`).
+///
+/// `gesture` and `synth` are a deliberate pair, and the **gap between them is the point**:
+/// `gesture` is what the recognizer saw, `synth` is what actually got posted. A `gesture`
+/// row with no matching `synth` row is a gesture the policy dropped — which is exactly the
+/// "I tapped and nothing happened" report. `mb-dev log-conflicts` wires only three of the
+/// streams (docs/13 documents it as a three-stream Feature B instrument, and docs/14's
+/// findings are written against that); the shipping diagnostics mode wires all four.
 ///
 /// Promoted out of the `mb-dev log-conflicts` harness (docs/13, docs/14 §Click/drag
 /// de-confliction), which measured Feature B, into the recorder behind the shipping
@@ -133,6 +141,21 @@ public final class DiagnosticsLog {
         let during = holdActive ? "  ⚠︎ DURING synthetic drag" : ""
         let verdict = wasSwallowed ? "  → SWALLOWED" : ""
         onConsoleLine?("  [\(ms())ms] physical \(isDown ? "down" : "up") btn\(buttonNumber)\(during)\(verdict)")
+    }
+
+    /// A gesture the recognizer produced — **before** the policy filter and before the
+    /// secondary-click swap, so the zone here is where the *finger* was, not which button
+    /// was posted. Pair it with the `synth` stream: recognized-with-no-emission is a
+    /// dropped gesture, and the two zones disagreeing is a left-handed mouse arrangement.
+    ///
+    /// Never touches `holdActive` — that column must track buttons that were really down,
+    /// and a `holdBegan` the policy went on to drop never pressed anything.
+    public func gesture(_ g: ButtonGesture) {
+        switch g {
+        case let .click(z, n):  row("gesture", "click(\(z);\(n))")
+        case let .holdBegan(z): row("gesture", "holdBegan(\(z))")
+        case let .holdEnded(z): row("gesture", "holdEnded(\(z))")
+        }
     }
 
     public func synth(_ e: SynthEvent) {
