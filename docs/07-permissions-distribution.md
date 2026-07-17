@@ -178,6 +178,24 @@ which is why the stub's shape is load-bearing rather than decoration. It's recog
 opening `# Unreleased` heading, so a file passed to `--notes` that doesn't use the
 convention publishes verbatim.
 
+*Why the cut unwraps the notes:* a single newline inside a paragraph is **ambiguous** in
+markdown, and the two destinations resolve it differently — Sparkle reflows it as a soft
+break, Forgejo (Codeberg) renders it as a hard `<br>`. So notes hard-wrapped at the repo's
+width looked right in the update dialog and arrived visibly ragged on the release page, worst
+where bold and links made the source line length diverge from the rendered one (observed on
+the 1.1.1 cut: 15 `<br/>` in the release page). Feeding both renderers text with no
+intra-block newlines removes the ambiguity rather than tuning for one of them — *identical
+text is not identical rendering*, which is what "they cannot disagree" has to mean. Authors
+keep wrapping at the repo's width and reviewing normal diffs; `notes_unwrap()` joins each
+block at cut time.
+
+It joins only what legitimately wraps — paragraphs and list items. Anything whose line
+structure *is* its meaning passes through: fenced code, tables, indented code, and explicit
+hard breaks (two trailing spaces or a backslash). Blockquotes pass through **deliberately**:
+joining them safely would mean parsing what is nested inside, and collapsing a quoted list
+into a single bullet would corrupt the notes, whereas a wrapped quote merely renders ragged.
+The lesser failure is the one to prefer.
+
 *Two forcing functions,* both guarding quiet failures rather than loud ones. `generate_appcast`
 matches notes to an archive **by basename** and silently emits an item with no notes when
 none matches, so the cut asserts that the item enclosing this build's DMG carries a non-empty

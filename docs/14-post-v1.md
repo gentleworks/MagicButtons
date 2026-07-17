@@ -594,24 +594,32 @@ Release** for the hand-download) are built, a real notarized build 3 is **live**
 beta channel (S4) is deferred to `10-roadmap.md`.
 
 **Click/drag de-confliction** and **diagnostics mode** are both DONE + HW-verified
-2026-07-16 (sections above) — unreleased; version bumped to **1.1.1** in anticipation, no
-release cut yet.
+2026-07-16 (sections above), and **1.1.1 (build 4) SHIPPED 2026-07-17** — notarized Accepted
+on the first submission, live on Codeberg Pages + a mirrored Codeberg Release
+(`v1.1.1-4`), auto-update offered to 1.1.0.
 
-**Release notes in the Sparkle appcast — DONE 2026-07-17, not yet exercised by a real cut.**
-The appcast carried no notes through 1.1.0, so the update dialog showed an empty body — not
-a regression, but 1.1.1 is the first release that *changes clicking behavior*, so silent
-notes cost something. `release.sh` now defaults to the tracked
-`docs/release-notes/UNRELEASED.md`, writes it to `updates/<DMG basename>.md` (the basename
-carries the build number, so a hand-named file would go stale on every bump), passes
-`--embed-release-notes` to `generate_appcast`, feeds the same text to the Codeberg Release
-body, and clears the file after a successful publish. See docs/07 §Release notes for the
-rationale and the two assertions guarding it.
+**Release notes in the Sparkle appcast — DONE + verified by the 1.1.1 cut.** The appcast
+carried no notes through 1.1.0, so the update dialog showed an empty body — not a regression,
+but 1.1.1 is the first release that *changes clicking behavior*, so silent notes cost
+something. `release.sh` now defaults to the tracked `docs/release-notes/UNRELEASED.md`,
+unwraps it, writes it to `updates/<DMG basename>.md` (the basename carries the build number,
+so a hand-named file would go stale on every bump), passes `--embed-release-notes` to
+`generate_appcast`, feeds the same text to the Codeberg Release body, and clears the file
+after a successful publish. See docs/07 §Release notes for the rationale and the guards.
 
-Verified against the real `generate_appcast` on the 1.1.0 build-3 DMG: the item embeds
-`<description sparkle:format="markdown">` as CDATA with the stub preamble stripped. **Not
-yet verified:** an actual cut (the tagging, clearing, and how Sparkle *renders* the markdown
-in the dialog) — that happens at the 1.1.1 release. One thing to watch there: the notes lean
-on bold, headings, and nested bullets, and the dialog is a small WebView.
+The cut confirmed the appcast path end to end: the live feed's newest item is build 4 with a
+valid `edSignature` and a 2052-char `<description sparkle:format="markdown">`, no stub leak,
+and **the update dialog renders it perfectly on hardware**.
+
+**What the cut caught that no dry run could.** The *same text* rendered correctly in Sparkle
+and badly on the Codeberg release page — ragged right edge, worst where bold and links made
+the source line length diverge from the rendered one. Cause: a single newline inside a
+paragraph is ambiguous markdown, and the two renderers resolve it oppositely (Sparkle soft,
+Forgejo hard `<br>` — 15 of them in the page). So "one source feeds both, they cannot
+disagree" was true of the *text* and false of the *rendering* — the property was weaker than
+it read. Fixed by unwrapping at cut time (docs/07), which removes the ambiguity instead of
+tuning for one renderer; the live 1.1.1 body was patched via the Forgejo API (no rebuild —
+notes live in the feed and the release body, not the DMG).
 
 Other candidates live in `10-roadmap.md` (e.g. deferred-click timing, `clickTiming =
 .deferred`, specified in docs/03 §Click timing; and Feature A, suppress physical clicks,

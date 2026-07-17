@@ -117,13 +117,44 @@ plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist" 2>/d
 # --notes FILE is published verbatim.
 notes_has_stub() { [[ -f "$1" ]] && [[ "$(awk 'NF { print; exit }' "$1")" == "# Unreleased" ]]; }
 
-# The one source both destinations read: strips the stub, leaving the user-facing markdown.
+# Join each hard-wrapped block onto one line. A single newline inside a paragraph is
+# AMBIGUOUS in markdown — CommonMark calls it a soft break, Forgejo (Codeberg) renders it as
+# a hard <br>, Sparkle reflows it — so notes wrapped for the repo arrive ragged on the
+# release page while looking right in the update dialog. Feeding both renderers text with no
+# intra-block newlines removes the ambiguity instead of tuning for one of them: identical
+# text is not identical rendering, which is what "they cannot disagree" has to mean.
+# Authors keep wrapping at the repo's width; the cut unwraps.
+#
+# Only paragraphs and list items are joined — the blocks that actually wrap. Everything whose
+# line structure IS its meaning passes through: fenced code, tables, indented code, and an
+# explicit hard break (two trailing spaces or a backslash), so a note that means a break gets
+# one. Blockquotes pass through too, deliberately: joining them safely would mean parsing
+# what is nested inside the quote, and collapsing a quoted list into one bullet would corrupt
+# the notes — a wrapped quote merely renders ragged, which is the lesser failure.
+notes_unwrap() {
+  awk '
+    function emit() { if (buf != "") { print buf; buf = "" } }
+    /^```/                       { emit(); print; fence = !fence; next }
+    fence                        { print; next }
+    /^[[:space:]]*$/             { emit(); print ""; next }
+    /^#{1,6}[[:space:]]/         { emit(); print; next }
+    /^[[:space:]]*[|>]/          { emit(); print; next }
+    /^    /                      { emit(); print; next }
+    /(  |\\)$/                   { emit(); print; next }
+    /^[[:space:]]*([-*+]|[0-9]+\.)[[:space:]]/ { emit(); buf = $0; next }
+                                 { sub(/^[[:space:]]+/, ""); buf = (buf == "" ? $0 : buf " " $0) }
+    END                          { emit() }
+  '
+}
+
+# The one source both destinations read: strips the stub and unwraps, leaving markdown that
+# renders the same everywhere.
 notes_body() {
   if notes_has_stub "$1"; then
     awk 'body { print } /^-->/ && !body { body = 1 }' "$1" | sed '/./,$!d'
   else
     cat "$1"
-  fi
+  fi | notes_unwrap
 }
 
 # generate_appcast attaches release notes from a file whose basename matches the archive's,
