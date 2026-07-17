@@ -134,3 +134,38 @@ the notarized cdhash). The local-dev signing default in `AppShell/Signing.xcconf
   explicit `app-sandbox=false` entitlement still applies. First submission failed on
   exactly this and the re-submission was **Accepted** (2026-07-14) → `source=Notarized
   Developer ID` on both the DMG and the `.app`.
+
+### Release notes
+
+**`docs/release-notes/UNRELEASED.md` is tracked, and any PR with user-visible impact
+updates it as part of that PR.** The cut publishes it and clears it back to the stub.
+Published notes then live with the build — never as a second copy here.
+
+*Why tracked, when the notes are only needed until the cut:* they are a description of
+**what is on `main`**, and an untracked file can't track `main` — it describes the trunk as
+seen from one working tree on one machine, and goes silently stale the moment a PR merges
+from the web UI or a fresh clone, with nothing able to detect it. Branch protection means
+PRs are the only path to `main`, so the PR is the one place every user-impacting change is
+reliably seen. Writing the note *there* also puts the user-facing description in front of
+the reviewer next to the change, while the author still knows what it means for users — a
+check no out-of-repo file can offer.
+
+*Why cleared at the cut, rather than kept as a per-version file:* once published, the notes
+are an attribute of a shipped build and have two canonical homes — the **Codeberg Release**
+body and the **embedded `<description>` in `appcast.xml`** (published on the `pages` branch,
+which is what the updater reads). A repo copy afterwards is a duplicate that can only drift.
+Past releases are read from those, not from here.
+
+*Why `UNRELEASED.md` and not `1.1.1.md`:* a version-named file asserts a release that hasn't
+happened and goes stale if the version bumps again. The cut reads the version from the build,
+so the filename doesn't need it; clearing is then a truncate rather than a delete-and-rename.
+
+Both destinations are to be fed from this one source at cut time, so they cannot disagree.
+**As built today:** `release.sh --notes FILE` posts the Release body — that is the only
+wired path, so the appcast currently carries no notes and Sparkle's update dialog shows an
+empty body (1.1.0 shipped that way). **Pending:** default `--notes` to `UNRELEASED.md`, copy
+it to `updates/<DMG basename>.md`, add `--embed-release-notes` to the `generate_appcast`
+call, and clear the file after a successful publish. Embedding beats linking — no extra URL
+and no 404 risk — and the copy has to happen at cut time because the DMG basename carries
+the build number, so a hand-named file would go stale on every bump. `updates/` is
+gitignored: it is the local staging dir for the pipeline, not a source of truth.
