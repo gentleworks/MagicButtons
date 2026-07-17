@@ -26,7 +26,7 @@ Press-and-hold treats a resting finger as the start of a drag, so it needs the t
 mouse kept clear: grip it from the sides, and touch the shell only when you mean to tap or
 drag.
 
-One consequence worth knowing: while a resting finger has started a drag, **clicking the
+While a resting finger has started a drag, **clicking the
 mouse won't register until you lift that finger** — so resting a finger and *then*
 double-clicking won't select a word. Starting the double-click with the shell clear works
 normally.
@@ -46,3 +46,6 @@ It records only which zone of the mouse your finger touched, which gestures were
 recognized, and when. It never records text, cursor positions, or key presses — so it's
 safe to attach to a public bug report. Recording is always off when MagicButtons starts,
 and stops on its own after 30 minutes.
+
+Reports can be filed as Issues on the Codeberg project at [https://codeberg.org/anguiano/MagicButtons/issues/new](https://codeberg.org/anguiano/MagicButtons/issues/new).  Keep in mind this is a free volunteer
+project and response times may be long and inconsistent.

@@ -160,12 +160,28 @@ Past releases are read from those, not from here.
 happened and goes stale if the version bumps again. The cut reads the version from the build,
 so the filename doesn't need it; clearing is then a truncate rather than a delete-and-rename.
 
-Both destinations are to be fed from this one source at cut time, so they cannot disagree.
-**As built today:** `release.sh --notes FILE` posts the Release body — that is the only
-wired path, so the appcast currently carries no notes and Sparkle's update dialog shows an
-empty body (1.1.0 shipped that way). **Pending:** default `--notes` to `UNRELEASED.md`, copy
-it to `updates/<DMG basename>.md`, add `--embed-release-notes` to the `generate_appcast`
-call, and clear the file after a successful publish. Embedding beats linking — no extra URL
+Both destinations are fed from this one source at cut time, so they cannot disagree. The cut
+reads `UNRELEASED.md` (override with `--notes FILE` for an ad-hoc cut), writes the notes to
+`updates/<DMG basename>.md` for the appcast, posts the same text as the Codeberg Release
+body, and clears the file once the publish succeeds. Embedding beats linking — no extra URL
 and no 404 risk — and the copy has to happen at cut time because the DMG basename carries
 the build number, so a hand-named file would go stale on every bump. `updates/` is
-gitignored: it is the local staging dir for the pipeline, not a source of truth.
+gitignored: it is the local staging dir for the pipeline, not a source of truth. (1.1.0
+shipped before any of this and has an empty update-dialog body; 1.1.1 is the first release
+whose notes reach the updater.)
+
+*What the script strips, and why it has to:* `generate_appcast` embeds the notes file
+**verbatim** as CDATA, and the Codeberg body is the file's text — so the stub preamble
+(the `# Unreleased` heading and the workflow comment) would ship to users as an "Unreleased"
+title in the update dialog. `notes_body()` drops everything through the end of that comment,
+which is why the stub's shape is load-bearing rather than decoration. It's recognized by the
+opening `# Unreleased` heading, so a file passed to `--notes` that doesn't use the
+convention publishes verbatim.
+
+*Two forcing functions,* both guarding quiet failures rather than loud ones. `generate_appcast`
+matches notes to an archive **by basename** and silently emits an item with no notes when
+none matches, so the cut asserts that the item enclosing this build's DMG carries a non-empty
+`<description>` — the same shape as the `edSignature` assertion next to it. And clearing runs
+*after* the Codeberg Release, because that step tags the released source commit and clearing
+first would dirty the tree it tags. Branch protection means the script can't commit the
+cleared file; it prints a reminder and the clear lands with the next PR.

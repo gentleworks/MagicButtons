@@ -595,18 +595,23 @@ beta channel (S4) is deferred to `10-roadmap.md`.
 
 **Click/drag de-confliction** and **diagnostics mode** are both DONE + HW-verified
 2026-07-16 (sections above) — unreleased; version bumped to **1.1.1** in anticipation, no
-release cut yet. Release notes are written ad hoc at cut time (`release.sh --notes FILE`)
-and are not tracked in the repo.
+release cut yet.
 
-**Next up: release notes in the Sparkle appcast.** The appcast carries none today, so the
-update dialog shows an empty body — not a regression (1.1.0 shipped that way), but 1.1.1 is
-the first release that *changes clicking behavior*, so silent notes cost something.
-`generate_appcast` auto-detects a notes file whose basename matches the archive, and
-`--embed-release-notes` forces embedding rather than linking (no extra URL, no 404 risk).
-The wrinkle is that the DMG basename carries the build number, so a hand-named file goes
-stale on every bump — `release.sh` should copy the canonical notes to
-`updates/<DMG basename>.md` at cut time so one source feeds both the Codeberg Release and
-the appcast.
+**Release notes in the Sparkle appcast — DONE 2026-07-17, not yet exercised by a real cut.**
+The appcast carried no notes through 1.1.0, so the update dialog showed an empty body — not
+a regression, but 1.1.1 is the first release that *changes clicking behavior*, so silent
+notes cost something. `release.sh` now defaults to the tracked
+`docs/release-notes/UNRELEASED.md`, writes it to `updates/<DMG basename>.md` (the basename
+carries the build number, so a hand-named file would go stale on every bump), passes
+`--embed-release-notes` to `generate_appcast`, feeds the same text to the Codeberg Release
+body, and clears the file after a successful publish. See docs/07 §Release notes for the
+rationale and the two assertions guarding it.
+
+Verified against the real `generate_appcast` on the 1.1.0 build-3 DMG: the item embeds
+`<description sparkle:format="markdown">` as CDATA with the stub preamble stripped. **Not
+yet verified:** an actual cut (the tagging, clearing, and how Sparkle *renders* the markdown
+in the dialog) — that happens at the 1.1.1 release. One thing to watch there: the notes lean
+on bold, headings, and nested bullets, and the dialog is a small WebView.
 
 Other candidates live in `10-roadmap.md` (e.g. deferred-click timing, `clickTiming =
 .deferred`, specified in docs/03 §Click timing; and Feature A, suppress physical clicks,

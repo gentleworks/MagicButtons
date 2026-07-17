@@ -17,6 +17,12 @@
 #   scripts/release.sh --publish --notes FILE   # …with release notes read from FILE (markdown)
 #   scripts/release.sh --skip-notarize # build + sign + dmg + appcast only (no Apple round-trip)
 #
+# Release notes default to docs/release-notes/UNRELEASED.md (tracked; every user-impacting
+# PR adds to it). One source feeds both destinations — the embedded appcast <description>
+# Sparkle shows in its update dialog, and the Codeberg Release body — so they cannot
+# disagree; a successful --publish then clears the file back to its stub. See
+# docs/07 §Release notes.
+#
 # --publish pushes via a `pages` git worktree (MB_PAGES_WORKTREE, default ../MagicButtons-pages)
 # AND publishes a Codeberg Release (git tag + notes + the SAME notarized DMG) via the Forgejo
 # API, so the binary people download by hand always matches what Sparkle serves. That step needs
@@ -96,26 +102,84 @@ done
 [[ "$SKIP_NOTARIZE" == 1 && "$PUBLISH" == 1 ]] \
   && { echo "error: --publish cannot be combined with --skip-notarize" >&2; exit 2; }
 
+# The pending notes for the next release. Tracked, so it describes what is on `main`
+# rather than one working tree; --notes overrides it for an ad-hoc cut.
+NOTES_FILE="${NOTES_FILE:-$REPO/docs/release-notes/UNRELEASED.md}"
+
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 die()  { printf '\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist" 2>/dev/null; }
+
+# UNRELEASED.md opens with a stub preamble — an "# Unreleased" heading and an HTML comment
+# carrying the workflow — that is scaffolding for whoever writes the notes, not something a
+# user should meet in an update dialog. The notes body is everything after that comment.
+# Both are recognized only when the file actually opens with the stub, so an ad-hoc
+# --notes FILE is published verbatim.
+notes_has_stub() { [[ -f "$1" ]] && [[ "$(awk 'NF { print; exit }' "$1")" == "# Unreleased" ]]; }
+
+# The one source both destinations read: strips the stub, leaving the user-facing markdown.
+notes_body() {
+  if notes_has_stub "$1"; then
+    awk 'body { print } /^-->/ && !body { body = 1 }' "$1" | sed '/./,$!d'
+  else
+    cat "$1"
+  fi
+}
+
+# generate_appcast attaches release notes from a file whose basename matches the archive's,
+# and silently emits an item with no notes when none matches — the same quiet-failure shape
+# as the unsigned-entry case, so assert the result rather than trust it. Checks the item
+# carrying THIS build's enclosure, not just any description in the feed.
+assert_embedded_notes() {
+  local rc=0
+  command -v python3 >/dev/null || die "python3 is needed to verify the appcast's release notes"
+  WANT="$(basename "$1")" python3 - "$UPDATES/appcast.xml" <<'PY' || rc=$?
+import os, sys, xml.etree.ElementTree as ET
+want = os.environ["WANT"]
+for item in ET.parse(sys.argv[1]).getroot().iter("item"):
+    enclosure = item.find("enclosure")
+    if enclosure is not None and enclosure.get("url", "").endswith("/" + want):
+        description = item.find("description")
+        sys.exit(0 if description is not None and (description.text or "").strip() else 1)
+sys.exit(2)
+PY
+  case "$rc" in
+    0) ;;
+    1) die "appcast item for $(basename "$1") carries no release notes — expected them embedded from ${1%.dmg}.md" ;;
+    2) die "appcast has no item enclosing $(basename "$1") — generate_appcast did not add this build" ;;
+    *) die "could not verify the appcast's release notes (python3 exited $rc)" ;;
+  esac
+}
 
 # Copy the just-built DMG into updates/ under a version-unique name, then (re)generate the
 # EdDSA-signed appcast over the whole updates/ dir. generate_appcast reads SUPublicEDKey
 # from the app inside each archive and signs with the matching private key in the Keychain;
 # a mismatch/absent key makes it silently emit an UNSIGNED entry, so we assert the signature.
 gen_appcast() {
-  local short build versioned
+  local short build versioned body
   [[ -x "$SPARKLE_BIN/generate_appcast" ]] \
     || die "generate_appcast not found at $SPARKLE_BIN (did the Sparkle package resolve during the build?)"
   short="$(plist CFBundleShortVersionString)"; build="$(plist CFBundleVersion)"
   mkdir -p "$UPDATES"
   versioned="$UPDATES/$SCHEME-${short}-${build}.dmg"
   cp "$DMG" "$versioned"
+  # Notes are matched to the archive by basename, so the copy belongs here rather than in a
+  # hand-named file: the basename carries the build number and would go stale on every bump.
+  # --embed-release-notes inlines them as CDATA, so the feed needs no second URL to 404 on.
+  body="$(notes_body "$NOTES_FILE")"
+  if [[ -n "$body" ]]; then
+    printf '%s\n' "$body" > "${versioned%.dmg}.md"
+  else
+    printf '\033[33m  ⚠ no release notes in %s — Sparkle'\''s update dialog will show an empty body.\033[0m\n' \
+      "${NOTES_FILE#$REPO/}" >&2
+  fi
   step "Generating EdDSA-signed appcast"
-  "$SPARKLE_BIN/generate_appcast" --download-url-prefix "$PAGES_URL_PREFIX" "$UPDATES"
+  "$SPARKLE_BIN/generate_appcast" --download-url-prefix "$PAGES_URL_PREFIX" --embed-release-notes "$UPDATES"
   grep -q 'edSignature' "$UPDATES/appcast.xml" \
     || die "appcast.xml has no EdDSA signature — SUPublicEDKey in Info.plist must match the Keychain key (generate_keys -p)"
+  if [[ -n "$body" ]]; then
+    assert_embedded_notes "$versioned"
+  fi
   echo "  ✓ $UPDATES/appcast.xml  (enclosure: $(basename "$versioned"))"
   # When --publish is set, do_publish handles the upload; only nudge for the manual case.
   if [[ "$PUBLISH" != 1 ]]; then
@@ -188,12 +252,11 @@ do_codeberg_release() {
   fi
   git -C "$REPO" push -q origin "refs/tags/$tag"
 
-  if [[ -n "$NOTES_FILE" ]]; then
-    [[ -f "$NOTES_FILE" ]] || die "notes file not found: $NOTES_FILE"
-    body="$(cat "$NOTES_FILE")"
-  else
-    body="$name — auto-updates via Sparkle, or download the DMG below (the same notarized build the updater serves). Requires macOS 14 or later."
-  fi
+  # The same body the appcast embedded, from the same source, so the two can't disagree.
+  # With nothing to say, a generic line beats a blank release page.
+  body="$(notes_body "$NOTES_FILE")"
+  [[ -n "$body" ]] \
+    || body="$name — auto-updates via Sparkle, or download the DMG below (the same notarized build the updater serves). Requires macOS 14 or later."
   # python3 does the JSON escaping so arbitrary markdown notes can't break the payload.
   payload="$(TAG="$tag" SHA="$sha" NAME="$name" BODY="$body" python3 -c '
 import json, os
@@ -217,10 +280,27 @@ print(json.dumps({
   echo "  ✓ https://codeberg.org/$CODEBERG_REPO/releases/tag/$tag  ($(basename "$versioned"))"
 }
 
+# Once published, the notes are an attribute of the shipped build — they live in the Codeberg
+# Release body and the embedded appcast description, and a copy left here could only drift.
+# Truncate back to the stub the file documents itself with, rather than rewriting a stub from
+# here that could drift the other way. Branch protection means this can't be committed from
+# the script; it lands with the next PR (docs/07 §Release notes).
+clear_notes() {
+  notes_has_stub "$NOTES_FILE" || return 0
+  [[ -n "$(notes_body "$NOTES_FILE")" ]] || return 0
+  awk '{ print } /^-->/ { exit }' "$NOTES_FILE" > "$NOTES_FILE.tmp"
+  mv "$NOTES_FILE.tmp" "$NOTES_FILE"
+  step "Cleared ${NOTES_FILE#$REPO/} back to its stub"
+  echo "  The notes ship with the build now. Commit the cleared file in your next PR."
+}
+
 [[ -n "$IDENTITY" && -n "$TEAM" ]] || die "signing identity not set.
   Set MB_SIGN_IDENTITY and MB_TEAM_ID — either in scripts/release.local.env
   (cp scripts/release.local.env.example scripts/release.local.env, then fill it in)
   or in the environment. See the header of this script."
+
+# Fail before the build rather than after the notarize round-trip.
+[[ -f "$NOTES_FILE" ]] || die "release notes file not found: $NOTES_FILE"
 
 cd "$REPO"
 
@@ -360,9 +440,12 @@ spctl -a -t exec -vv "$APP"
 gen_appcast
 
 # ── 7. Publish to Codeberg Pages (Sparkle feed) + Codeberg Release (only with --publish) ─
+# clear_notes runs last: do_codeberg_release tags the released source commit, and clearing
+# first would dirty the tree it tags.
 if [[ "$PUBLISH" == 1 ]]; then
   do_publish
   do_codeberg_release
+  clear_notes
 fi
 
 printf '\n\033[32m✓ Release ready: %s\033[0m\n' "$DMG"
