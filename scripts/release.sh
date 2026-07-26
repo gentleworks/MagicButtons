@@ -110,6 +110,21 @@ step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 die()  { printf '\033[31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist" 2>/dev/null; }
 
+# A curl that keeps the response body on an HTTP error, leaving it in API_BODY and the
+# status in API_STATUS; succeeds only on 2xx. Deliberately NOT `curl -f`, which discards
+# the body and so collapses a real API fault (bad token scope, malformed payload) and a
+# transient Codeberg 5xx into the same opaque "(56) error 500" — the two want opposite
+# responses, and the 1.1.2 cut hit the transient one with no way to tell which it was
+# until a retry cleared it.
+api() {
+  local out
+  out="$(curl -sS -w $'\n%{http_code}' "$@" 2>&1)" \
+    || { API_STATUS="000"; API_BODY="$out"; return 1; }
+  API_STATUS="${out##*$'\n'}"
+  API_BODY="${out%$'\n'*}"
+  [[ "$API_STATUS" == 2* ]]
+}
+
 # UNRELEASED.md opens with a stub preamble — an "# Unreleased" heading and an HTML comment
 # carrying the workflow — that is scaffolding for whoever writes the notes, not something a
 # user should meet in an update dialog. The notes body is everything after that comment.
@@ -298,16 +313,29 @@ print(json.dumps({
     "body": os.environ["BODY"],
     "draft": False, "prerelease": False,
 }))')"
-  release_json="$(curl -fsS -X POST "$CODEBERG_API/repos/$CODEBERG_REPO/releases" \
+  # Note for whoever reads this after a failure: by this point the tag is pushed AND this
+  # build is in the local appcast, so a full re-run dies on the newer-than-last check
+  # (§2.5). Recovery is to redo *this step only*, not the script.
+  api -X POST "$CODEBERG_API/repos/$CODEBERG_REPO/releases" \
     -H "Authorization: token $CODEBERG_TOKEN" -H "Content-Type: application/json" \
-    -d "$payload")" || die "Codeberg release creation failed for $tag"
+    -d "$payload" \
+    || die "Codeberg release creation failed for $tag — HTTP $API_STATUS
+  $API_BODY
+  A 5xx here is usually transient and clears on an identical retry; a 4xx is real (check
+  the token's repository:write scope). Pages is already published either way — retry this
+  step alone, since a full re-run would fail the newer-than-last check."
+  release_json="$API_BODY"
   id="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' <<<"$release_json")" \
-    || die "could not parse the release id from Codeberg's response"
-  curl -fsS -X POST \
+    || die "could not parse the release id from Codeberg's response:
+  $release_json"
+  api -X POST \
     "$CODEBERG_API/repos/$CODEBERG_REPO/releases/$id/assets?name=$(basename "$versioned")" \
     -H "Authorization: token $CODEBERG_TOKEN" \
-    -F "attachment=@$versioned;type=application/octet-stream" >/dev/null \
-    || die "release $tag created but the DMG upload failed — attach it manually, or delete the release and re-run"
+    -F "attachment=@$versioned;type=application/octet-stream" \
+    || die "release $tag created but the DMG upload failed — HTTP $API_STATUS
+  $API_BODY
+  The release exists and is missing only its download. Attach $versioned to it by hand,
+  or delete the release and redo this step."
   echo "  ✓ https://codeberg.org/$CODEBERG_REPO/releases/tag/$tag  ($(basename "$versioned"))"
 }
 
