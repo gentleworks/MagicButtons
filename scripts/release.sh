@@ -102,6 +102,16 @@ done
 [[ "$SKIP_NOTARIZE" == 1 && "$PUBLISH" == 1 ]] \
   && { echo "error: --publish cannot be combined with --skip-notarize" >&2; exit 2; }
 
+# A dry run must not write into the publish staging mirror. `gen_appcast` copies the DMG
+# into $UPDATES and rewrites appcast.xml there, and `do_publish` later copies *every*
+# versioned DMG out of that directory — so an un-stapled dry-run build left behind would
+# be published for real. It also poisons the §2.5 forcing function, which reads that same
+# appcast: a dry run of build N makes the real cut of build N die "not newer". Divert dry
+# runs somewhere inspectable but inert, so "dry run" is structurally true, not a promise.
+if [[ "$SKIP_NOTARIZE" == 1 ]]; then
+  UPDATES="$REPO/build/updates-dryrun"
+fi
+
 # The pending notes for the next release. Tracked, so it describes what is on `main`
 # rather than one working tree; --notes overrides it for an ad-hoc cut.
 NOTES_FILE="${NOTES_FILE:-$REPO/docs/release-notes/UNRELEASED.md}"
