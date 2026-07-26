@@ -73,9 +73,13 @@ final class AppModel {
     /// Same retained-window pattern for the About card (docs/09): a small fixed-size
     /// panel an accessory app can re-front on every reopen.
     @ObservationIgnored private var aboutWindow: NSWindow?
-    /// Monotonic timestamp of the last frame seen, used to derive `isReceivingTouches`
-    /// on the status poll without churning observation on every 60–120 Hz frame.
-    @ObservationIgnored private var lastFrameAt: TimeInterval = 0
+    /// Tracks the contact stream's health off the frame tee — it derives
+    /// `isReceivingTouches` on the status poll without churning observation on every
+    /// 60–120 Hz frame, and decides when an enumerated-but-deaf stream must be
+    /// re-subscribed (docs/08). The clock lives here; the monitor is pure decision logic.
+    @ObservationIgnored private var streamHealth = StreamHealthMonitor()
+    /// The workspace wake observer, retained so `stop()` can remove it.
+    @ObservationIgnored private var wakeObserver: NSObjectProtocol?
 
     // MARK: Observable status mirror (drives the menu bar + Settings)
 
@@ -222,7 +226,7 @@ final class AppModel {
         coordinator.onFrame = { [weak self] frame in
             guard let self else { return }
             self.visualizer.update(frame)
-            self.lastFrameAt = ProcessInfo.processInfo.systemUptime
+            self.streamHealth.noteFrame(at: ProcessInfo.processInfo.systemUptime)
             // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one
             // check per frame — the other two streams aren't even installed.
             self.diagnostics.log?.contacts(frame)
@@ -255,12 +259,20 @@ final class AppModel {
             self.diagnosticsLogURL = self.diagnostics.lastFileURL
             self.diagnosticsNote = self.explanation(for: reason)
         }
+        // Cross-check the contact stream against physical clicks. A Magic Mouse can't be
+        // clicked without a finger on its touch surface, so a click with no frames around
+        // it proves the stream went deaf and earns a re-subscription (docs/08).
+        // Hopped off the callback deliberately: this tee runs *inside* the CGEventTap
+        // callback (EventInterceptor), and re-enumeration is synchronous work that would
+        // stall event delivery and risk `tapDisabledByTimeout`. The recognizer has already
+        // been told synchronously by the coordinator, so only the recovery is deferred.
+        coordinator.onPhysicalClick = { [weak self] isDown in
+            guard isDown else { return }
+            Task { @MainActor [weak self] in self?.recoverIfStreamIsProvenDeaf() }
+        }
         permissions.onChange = { [weak self] snapshot in self?.permissionsSnapshot = snapshot }
         deviceMonitor.onChange = { [weak self] in
-            MainActor.assumeIsolated {
-                self?.coordinator.refreshDevices()
-                self?.mirrorStatus()
-            }
+            MainActor.assumeIsolated { self?.reenumerateDevices() }
         }
     }
 
@@ -271,9 +283,56 @@ final class AppModel {
         coordinator.start()
         coordinator.setSecondaryClickSide(secondaryClickReader.currentSide())
         deviceMonitor.start()
+        startWakeWatch()
         reconcileLoginItem()
         mirrorStatus()
         startPolling()
+    }
+
+    /// Re-enumerate on wake. A Bluetooth Magic Mouse drops and re-registers across sleep,
+    /// which can leave the source holding a device handle that no longer delivers frames —
+    /// and that re-registration doesn't reliably produce the IOKit add/remove pair
+    /// `DeviceMonitor` watches, so the app would otherwise stay silently deaf until a
+    /// relaunch (docs/08). Wake is the precise moment the handle can go stale, which is
+    /// why this is a hook rather than an inference from frame silence. `refreshDevices`
+    /// lifts any hold first and re-enumeration is idempotent, so over-calling is safe.
+    private func startWakeWatch() {
+        guard wakeObserver == nil else { return }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reenumerateDevices() }
+        }
+    }
+
+    private func stopWakeWatch() {
+        guard let wakeObserver else { return }
+        NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        self.wakeObserver = nil
+    }
+
+    /// The single re-enumeration path, so the stream-health clock can't be left stale
+    /// behind a re-subscription that some caller forgot to report.
+    private func reenumerateDevices() {
+        coordinator.refreshDevices()
+        streamHealth.noteResubscribe()
+        mirrorStatus()
+    }
+
+    /// A physical click landed with no contact frames around it — proof the stream is
+    /// deaf (docs/08). Re-subscribe, rate-limited, and never mid-drag.
+    private func recoverIfStreamIsProvenDeaf() {
+        // Without an enumerated device there's nothing to re-subscribe to; the poll's
+        // own `!isDeviceConnected` retry owns that case.
+        guard isDeviceConnected else { return }
+        guard streamHealth.shouldRecover(
+            physicalClickAt: ProcessInfo.processInfo.systemUptime,
+            hasActiveHolds: coordinator.hasActiveHolds
+        ) else {
+            mirrorStatus()   // the proof may have flipped even when recovery is rate-limited
+            return
+        }
+        reenumerateDevices()
     }
 
     /// Stop everything, releasing any held button first (docs/05 §Press/release) — the
@@ -283,6 +342,7 @@ final class AppModel {
         // Close the log on a clean quit so its tail is on disk. An *unclean* exit is
         // covered too — rows are written as they happen, not batched.
         diagnostics.stop()
+        stopWakeWatch()
         deviceMonitor.stop()
         coordinator.stop()
         mirrorStatus()
@@ -313,9 +373,12 @@ final class AppModel {
         // Self-heal a launch-time enumeration race (docs/08): a Bluetooth Magic Mouse
         // that wasn't ready when the source first started never fires the hot-plug
         // attach we watch, so it'd otherwise stay "not detected" until a relaunch.
-        // Re-enumerate whenever we're running without a connected device.
+        // Re-enumerate whenever we're running without a connected device. The
+        // enumerated-but-*deaf* case can't be caught here — silence is indistinguishable
+        // from an untouched mouse — so it's handled by the wake hook and the
+        // physical-click cross-check instead (docs/08).
         if !isDeviceConnected {
-            coordinator.refreshDevices()
+            reenumerateDevices()
         }
         // Follow a mid-session change to the mouse's secondary-click side (System
         // Settings → Mouse). Idempotent, so this steady-state re-read is cheap.
@@ -340,8 +403,12 @@ final class AppModel {
         isDeviceConnected = coordinator.isDeviceConnected
         sourceError = coordinator.sourceError
         interceptorFailed = coordinator.interceptorFailed
-        isReceivingTouches = ProcessInfo.processInfo.systemUptime - lastFrameAt < 2.0
-        touchesNotArriving = coordinator.touchesNotArriving
+        isReceivingTouches = streamHealth.isReceivingFrames(at: ProcessInfo.processInfo.systemUptime)
+        // The coordinator's flag alone only says "no frame since (re)start", which an
+        // untouched mouse satisfies too — and re-enumeration on wake resets it, so on its
+        // own it would alarm after every sleep. Require the click cross-check's proof
+        // before telling the user anything is wrong (docs/08).
+        touchesNotArriving = coordinator.touchesNotArriving && streamHealth.isProvenDeaf
     }
 
     private func persist() {
@@ -717,9 +784,11 @@ final class AppModel {
             return "Couldn’t install the event tap — grant Accessibility so clicks can post."
         }
         // Connected yet no touches arrive: the silent-failure "deaf" case that would
-        // otherwise show no error at all (docs/08).
+        // otherwise show no error at all (docs/08). Only reached once a physical click
+        // has proved it and a re-subscription has already been tried, so the advice is
+        // the next step up, not the first thing to try.
         if touchesNotArriving {
-            return "The Magic Mouse is connected but no touches are arriving. Try relaunching MagicButtons."
+            return "The Magic Mouse is connected but no touches are arriving, and reconnecting didn’t help — Quit & Reopen MagicButtons."
         }
         switch sourceError {
         case .noDevice:      return "No Magic Mouse was found. Connect one and it’ll be picked up automatically."

@@ -234,6 +234,37 @@ import GestureEngine
         #expect(emitter.releases == [.middle])     // button lifted, not left stuck
     }
 
+    // MARK: Physical-click tee + hold visibility (deaf-stream recovery, docs/08)
+
+    @Test func physicalClickTeeMirrorsButtonState() {
+        // The App cross-checks this tee against the contact stream to catch a stream
+        // that enumerated but stopped delivering. It must see both edges, and must not
+        // disturb the recognizer's own view of physical click state.
+        let (coordinator, _, click, _) = makeCoordinator()
+        var seen: [Bool] = []
+        coordinator.onPhysicalClick = { seen.append($0) }
+        coordinator.start()
+
+        click.onPhysicalClickChange?(true)
+        click.onPhysicalClickChange?(false)
+        #expect(seen == [true, false])
+    }
+
+    @Test func hasActiveHoldsFollowsAnInFlightDrag() async {
+        // Recovery re-enumeration lifts holds (docs/05), so it must be able to see one
+        // in flight and stand down.
+        let (coordinator, source, _, emitter) = makeCoordinator()
+        coordinator.start()
+        #expect(!coordinator.hasActiveHolds)
+
+        for frame in holdInFlightFrames(x: 0.5) { source.onFrame?(frame) }
+        for _ in 0..<20 where emitter.presses.isEmpty { await Task.yield() }
+        #expect(coordinator.hasActiveHolds)
+
+        coordinator.refreshDevices()          // lifts the hold
+        #expect(!coordinator.hasActiveHolds)
+    }
+
     // MARK: Touch liveness (error-state observability, Phase 9.2)
 
     @Test func touchesNotArrivingUntilFirstFrame() async {

@@ -136,3 +136,46 @@ app holds no tap to orphan (docs/05 §Interceptor lifetime, docs/14).
 **HW-verified (2026-07-14):** on the Magic Mouse — a normal tap-and-a-half drag works
 unchanged (guard-on-trusted is invisible with Accessibility granted), and powering the
 mouse off mid-drag drops the drag cleanly with no stuck button (device-loss release).
+
+### E. Can a *successfully enumerated* stream go deaf? — **RESOLVED (post-v1): yes; recovered on wake + a click cross-check.**
+
+**Trigger observed (2026-07-25).** A 1.1.1 instance up for two days across many
+sleep/wake cycles stopped showing contacts in the visualizer and stopped synthesizing
+clicks, while the menu still read Active. The process was healthy (`sample` showed
+`mt_ThreadedMTEntry` parked in its runloop, main thread idle), the Magic Mouse was
+connected, and a **fresh process** driven from `mb-dev dump-frames` enumerated the
+mouse (`5152×9056`) and received contacts *at that moment*. So the system-wide stream
+was fine and only the running instance's subscription was dead.
+
+**Why nothing recovered it.** `AppCoordinator.isDeviceConnected` latches true on a
+*successful enumeration* — `MTDeviceCreateList` returned a portrait surface and
+`MTDeviceStart` was called — not on frames arriving. The App's self-heal is gated on
+`!isDeviceConnected`, so once the flag latched against a handle that later went stale
+it never fired again. `DeviceMonitor` didn't help either: a Bluetooth Magic Mouse can
+re-register without the IOHIDDevice add/remove pair it watches. And the menu-bar toggle
+can't help *by design* — `setEnabled` scopes the event tap, never the touch source — so
+the one thing a user naturally tries is guaranteed not to work.
+
+**Decision: two precise triggers, still no silence watchdog.** §D's measurement stands
+— the stream is delta-driven and a motionless finger goes silent for seconds, and an
+*untouched* mouse is silent indefinitely, so silence can neither stand in for a lift nor
+for a dead stream. A plain watchdog would also re-enumerate on a loop all night and,
+because re-enumeration resets `hasReceivedFrameSinceStart`, would leave the Status pane
+permanently alarming. Instead:
+
+1. **Wake hook.** `NSWorkspace.didWakeNotification → AppCoordinator.refreshDevices()`.
+   Sleep is the moment the handle actually goes stale, so this is a hook at the cause
+   rather than an inference from the symptom.
+2. **Physical-click cross-check** (`StreamHealthMonitor`). A Magic Mouse cannot be
+   physically clicked without a finger on its touch surface, so a click that arrives
+   with no contact frame near it is *proof* the stream is dead — and it is only
+   observable while the user is actually using the mouse, never while idle. Recovery is
+   rate-limited, and vetoed while a hold is in flight (re-enumeration lifts holds per
+   §D, which would drop a paused drag — the same motionless-finger case that killed the
+   watchdog).
+
+**Status-pane consequence.** `touchesNotArriving` alone only ever meant "no frame since
+(re)start", which an untouched mouse satisfies too; with re-enumeration now happening on
+every wake it would have alarmed after each sleep. The App therefore requires the cross-
+check's proof before surfacing it, which also makes the existing message honest — by the
+time it shows, a re-subscription has already been tried and failed.

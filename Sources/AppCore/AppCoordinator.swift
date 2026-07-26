@@ -66,8 +66,25 @@ public final class AppCoordinator {
     /// Read-only: it never influences behavior.
     public var onGesture: ((ButtonGesture) -> Void)?
 
+    /// Optional read-only tee of physical mouse button state (already on main), fired
+    /// after the recognizer has been told. The App cross-checks it against the contact
+    /// stream: a physical click is impossible without a finger on the touch surface, so
+    /// one that arrives with no frames around it proves the stream went deaf and should
+    /// be re-subscribed (`StreamHealthMonitor`, docs/08). Read-only: it never influences
+    /// behavior.
+    ///
+    /// Fires **inside the event-tap callback**, after the recognizer has been told (which
+    /// must stay synchronous — the tap's decision depends on it). A consumer that does
+    /// real work here has to hop off first, or it stalls event delivery and can trip
+    /// `tapDisabledByTimeout`.
+    public var onPhysicalClick: ((Bool) -> Void)?
+
     /// Whether recognized gestures are currently allowed through to the emitter.
     public var isMasterEnabled: Bool { settings.features.masterEnabled }
+
+    /// Whether a synthetic button is currently held. Consulted before a recovery
+    /// re-enumeration, which lifts every hold (docs/05) and so must not run mid-drag.
+    public var hasActiveHolds: Bool { pipeline.hasActiveHolds }
 
     /// The Magic Mouse secondary-click side currently honored by the emitter (read from
     /// the system by the App and pushed in via `setSecondaryClickSide`). Observable so
@@ -124,7 +141,11 @@ public final class AppCoordinator {
             }
         }
         clickSource.onPhysicalClickChange = { [weak self] active in
-            MainActor.assumeIsolated { self?.pipeline.setPhysicalClick(active) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.pipeline.setPhysicalClick(active)
+                self.onPhysicalClick?(active)
+            }
         }
         // The pipeline outlives recognizer rebuilds (`reconfigure` swaps only the
         // recognizer), so forwarding its gesture tee once here survives a settings change.

@@ -101,6 +101,11 @@ public final class GesturePipeline {
         }
     }
 
+    /// Whether any synthetic button is currently held. Read before a *recovery*
+    /// re-enumeration, which releases holds as a safety measure and so must not run
+    /// mid-drag (`StreamHealthMonitor`).
+    public var hasActiveHolds: Bool { !heldZones.isEmpty }
+
     /// Release every synthetic hold now — the coordinator's safety hook for feature
     /// disable, quit, or device loss (docs/05). Idempotent; a no-op until Phase 8
     /// produces holds, but wired now so the safety guarantee exists from the start.

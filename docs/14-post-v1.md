@@ -624,3 +624,20 @@ notes live in the feed and the release body, not the DMG).
 Other candidates live in `10-roadmap.md` (e.g. deferred-click timing, `clickTiming =
 .deferred`, specified in docs/03 §Click timing; and Feature A, suppress physical clicks,
 deferred with a full design capture in `05` §Suppress physical clicks).
+
+## Enumerated-but-deaf touch stream — recovered without a watchdog (1.1.2)
+
+A long-running 1.1.1 instance went silently deaf: no contacts in the visualizer, no
+synthesized clicks, menu still reading Active. Diagnosed live — the app's own subscription
+was dead while a fresh process read the same mouse fine (docs/08 §E has the evidence and
+the decision). Two triggers now recover it: a wake hook, and a physical-click cross-check
+that treats "clicked with no contacts" as proof of a dead stream. §D's rejection of a
+frame-silence watchdog stands and is the reason neither trigger is a timeout.
+
+The bug is really a *latched-flag* bug: `isDeviceConnected` recorded that enumeration
+succeeded and was then read as if it meant frames were flowing, which let the one
+self-heal the app had disqualify itself permanently. Worth watching for elsewhere —
+`interceptorFailed` has the same shape, though the tap's failure mode is loud rather than
+silent. Also worth remembering that the user-facing affordance actively misled here:
+toggling the menu switch off and on cannot restore the touch source, because `setEnabled`
+deliberately scopes only the event tap.
