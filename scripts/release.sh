@@ -105,9 +105,9 @@ done
 # A dry run must not write into the publish staging mirror. `gen_appcast` copies the DMG
 # into $UPDATES and rewrites appcast.xml there, and `do_publish` later copies *every*
 # versioned DMG out of that directory — so an un-stapled dry-run build left behind would
-# be published for real. It also poisons the §2.5 forcing function, which reads that same
-# appcast: a dry run of build N makes the real cut of build N die "not newer". Divert dry
-# runs somewhere inspectable but inert, so "dry run" is structurally true, not a promise.
+# be published for real. (It also used to poison the §2.5 forcing function, which read
+# that same appcast; §2.5 now reads the published feed instead.) Divert dry runs somewhere
+# inspectable but inert, so "dry run" is structurally true rather than a promise.
 if [[ "$SKIP_NOTARIZE" == 1 ]]; then
   UPDATES="$REPO/build/updates-dryrun"
 fi
@@ -443,15 +443,32 @@ echo "  ✓ Developer ID + Hardened Runtime + timestamp"
 step "Checking build number is newer than the last release"
 BUILD_NUM="$(plist CFBundleVersion)"
 [[ -n "$BUILD_NUM" ]] || die "could not read CFBundleVersion from the built app"
-if [[ -f "$UPDATES/appcast.xml" ]]; then
-  LAST_BUILD="$(grep -oE '<sparkle:version>[0-9]+</sparkle:version>' "$UPDATES/appcast.xml" \
-    | grep -oE '[0-9]+' | sort -n | tail -1)"
+# Asked against what is actually PUBLISHED. This used to read the local `updates/` mirror,
+# which is wrong in both directions: `updates/` is gitignored, so on a fresh clone the file
+# is absent and the guard silently passed (a build Sparkle would never offer, reported as
+# ✓); and a dry run rewrote it, so it also raised false alarms. The served feed is the only
+# thing that answers the question being asked.
+PUBLISHED_APPCAST="$(curl -fsS "${PAGES_URL_PREFIX}appcast.xml" 2>/dev/null)" || PUBLISHED_APPCAST=""
+if [[ -n "$PUBLISHED_APPCAST" ]]; then
+  LAST_BUILD="$(grep -oE '<sparkle:version>[0-9]+</sparkle:version>' <<<"$PUBLISHED_APPCAST" \
+    | grep -oE '[0-9]+' | sort -n | tail -1 || true)"
   if [[ -n "$LAST_BUILD" && "$BUILD_NUM" -le "$LAST_BUILD" ]]; then
     die "build number $BUILD_NUM is not newer than the last published build ($LAST_BUILD).
   Bump CURRENT_PROJECT_VERSION in project.yml so Sparkle offers this build as an update."
   fi
+  echo "  ✓ build $BUILD_NUM (version $(plist CFBundleShortVersionString)) — last published: ${LAST_BUILD:-none}"
+elif [[ "$PUBLISH" == 1 ]]; then
+  # Fail closed on the publishing path. Shipping a build Sparkle won't offer is precisely
+  # what this guard exists to prevent, and it is invisible after the fact — nobody gets an
+  # update and nothing errors. An unverifiable check must not read as a passing one.
+  die "couldn't read the published appcast at ${PAGES_URL_PREFIX}appcast.xml, so build
+  $BUILD_NUM can't be checked against what's already out there. Re-run when the feed is
+  reachable (or publish by hand if the site is down but the build is known to be newer)."
+else
+  printf '\033[33m  ⚠ published appcast unreachable — build number NOT verified.\033[0m\n' >&2
+  echo "    Not publishing, so continuing; a --publish run would stop here."
+  echo "  ✓ build $BUILD_NUM (version $(plist CFBundleShortVersionString))"
 fi
-echo "  ✓ build $BUILD_NUM (version $(plist CFBundleShortVersionString))"
 
 # ── 3. Package a DMG (app + /Applications drop target), then sign it ────────────
 step "Building DMG"
