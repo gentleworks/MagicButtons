@@ -135,6 +135,65 @@ the notarized cdhash). The local-dev signing default in `AppShell/Signing.xcconf
   exactly this and the re-submission was **Accepted** (2026-07-14) → `source=Notarized
   Developer ID` on both the DMG and the `.app`.
 
+### Running a cut, and recovering from a failed one
+
+The script is one command, but it is not atomic: it pushes a git tag and publishes to
+Codeberg Pages before the last step. **A cut that dies partway is normally finished by
+hand, not by re-running** — see Recovery below.
+
+**Pre-flight.** All four are checked by the script, but failing at step 1 beats failing
+after the notarize round-trip:
+
+- On `main`, synced, **clean tree** — `do_codeberg_release` tags `HEAD`, so whatever is
+  committed is what the tag claims shipped. A dirty tree only warns.
+- `CURRENT_PROJECT_VERSION` bumped in `project.yml` (nothing bumps it automatically).
+- `docs/release-notes/UNRELEASED.md` says something true about this build.
+- `scripts/release.local.env` present (`MB_SIGN_IDENTITY`, `MB_TEAM_ID`,
+  `MB_CODEBERG_TOKEN`), the `MagicButtons-Notary` keychain profile created, and the
+  `pages` worktree checked out.
+
+**Order of operations**, so a failure tells you what already happened:
+
+1. `xcodegen` → clean Release build, Developer ID signed
+2. re-sign the Sparkle helpers (see docs/14 §Sparkle — notarization fails without this)
+3. **§2.5 build-number check** against the *published* feed
+4. DMG → notarize (Apple round-trip) → staple → verify as a fresh Mac would
+5. `gen_appcast` — copies the DMG into `updates/`, **rewrites `updates/appcast.xml`**
+6. `do_publish` — **pushes `pages`**; the Sparkle feed is live from this moment
+7. `do_codeberg_release` — **pushes the tag**, creates the Release, uploads the DMG
+8. `clear_notes` — truncates `UNRELEASED.md` back to its stub
+
+**Post-cut, verify against the served URL** rather than the local file — these two fail
+silently, and `updates/` can agree with itself while the site disagrees:
+
+```
+curl -s https://anguiano.codeberg.page/MagicButtons/appcast.xml
+```
+
+The item for this build must carry an `edSignature` on its enclosure and a non-empty
+`<description>` with no `# Unreleased` stub leak. Notes are matched to an archive **by
+basename**, and a mismatch yields an item with no notes at all rather than an error.
+
+**Recovery.** By step 6 the feed is public and by step 7 the tag is pushed, so
+re-running the script is the wrong instinct: step 3 compares against the published feed,
+which now contains this build, and the re-run dies "not newer". Finish the remaining
+steps by hand instead — the Forgejo API for the release and its asset, then the
+`UNRELEASED.md` truncation. Check whether `clear_notes` ran before rewriting anything;
+if the cut died before step 8, the notes are still intact.
+
+A 5xx from Codeberg is usually transient and clears on an identical retry; a 4xx is real
+(start with the token's `repository:write` scope). The failure messages carry the status
+and the server's own response — that distinction is the whole reason they do.
+
+*Observed 2026-07-25 (the 1.1.2 cut):* everything through step 6 succeeded and the
+release POST returned a transient 500. Recovery was the release + asset by hand, then
+the truncation. See docs/14.
+
+**Dry runs.** `scripts/release.sh --skip-notarize` does everything bar the Apple
+round-trip. It writes to `build/updates-dryrun`, never to `updates/`, so it cannot
+contaminate the next real cut — this was not always true, and a dry run of the build you
+then tried to ship used to make the real cut fail step 3.
+
 ### Release notes
 
 **`docs/release-notes/UNRELEASED.md` is tracked, and any PR with user-visible impact

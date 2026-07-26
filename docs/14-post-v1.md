@@ -641,3 +641,36 @@ self-heal the app had disqualify itself permanently. Worth watching for elsewher
 silent. Also worth remembering that the user-facing affordance actively misled here:
 toggling the menu switch off and on cannot restore the touch source, because `setEnabled`
 deliberately scopes only the event tap.
+
+## Release-pipeline hardening — what the 1.1.2 cut exposed (post-1.1.2)
+
+The 1.1.2 cut succeeded through Codeberg Pages and then died on the Codeberg Release POST
+with a **transient HTTP 500**; an identical retry cleared it. Recovery was the release and
+its asset by hand, then the `UNRELEASED.md` truncation. Nothing was lost, but three real
+defects surfaced, all fixed since (docs/07 §Running a cut has the operational version):
+
+**1. A failed cut isn't re-runnable, and nothing said so.** By the time the release step
+runs, the tag is pushed and the feed is public — so the obvious recovery, re-running the
+script, dies on the build-number check. The knowledge that recovery means *finishing the
+remaining steps by hand* existed only in whoever ran the cut. Now written down, along with
+the step order needed to work out what already happened.
+
+**2. `curl -f` threw away the diagnosis.** Both Codeberg calls used it, so a transient 5xx
+and a real fault (bad token scope, malformed payload) arrived as the same opaque
+`curl: (56) ... error: 500`. They want opposite responses — retry vs. fix — and there was
+no way to tell which without retrying blind. An `api()` wrapper now keeps the body and
+status, and the failure messages carry both plus the recovery.
+
+**3. The build-number forcing function was reading the wrong file, and failed *open*.** It
+compared against the local `updates/appcast.xml`. That directory is gitignored, so on a
+fresh clone the file is absent, the check was skipped by its own `if [[ -f ]]`, and it
+printed ✓ — a build Sparkle would never offer, passing silently. It also meant a
+`--skip-notarize` dry run, which rewrote that file, made the real cut of the same build die
+"not newer" — while docs/07 recommended the dry run. Fixed on both sides: dry runs write to
+`build/updates-dryrun` (they also can't leave an un-stapled DMG where `do_publish` would
+find it), and the check reads the *served* feed, failing closed when it can't be fetched on
+a `--publish` run.
+
+The pattern worth carrying: **a check that can't run should not look like a check that
+passed.** #3 was invisible precisely because its skip path and its success path printed the
+same thing.
