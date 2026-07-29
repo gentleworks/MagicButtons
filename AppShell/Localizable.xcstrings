@@ -1,0 +1,1077 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "About MagicButtons": {
+      "comment": "About window title. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de MagicButtons"
+          }
+        }
+      }
+    },
+    "Accessibility granted, but clicks aren’t posting": {
+      "comment": "Menu status line: permission is present but the event tap failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accesibilidad concedida, pero los clics no se envían"
+          }
+        }
+      }
+    },
+    "Accessibility was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.": {
+      "comment": "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se concedió Accesibilidad mientras MagicButtons estaba en marcha. Sal y vuelve a abrir la app para terminar de activar los clics."
+          }
+        }
+      }
+    },
+    "Accessibility was granted while MagicButtons was running. Relaunch so clicks start posting.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se concedió Accesibilidad mientras MagicButtons estaba en marcha. Reinicia la app para que empiecen a enviarse los clics."
+          }
+        }
+      }
+    },
+    "Active": {
+      "comment": "Menu status line: running normally.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activo"
+          }
+        }
+      }
+    },
+    "Advanced": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avanzado"
+          }
+        }
+      }
+    },
+    "All features available.": {
+      "comment": "Features pane header: every capability is working.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las funciones están disponibles."
+          }
+        }
+      }
+    },
+    "Backend": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backend"
+          }
+        }
+      }
+    },
+    "Backend ready — no frames yet (touch the mouse to confirm).": {
+      "comment": "Status pane, Backend row: connected but no frames seen yet.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backend listo: aún no hay fotogramas (toca el ratón para confirmarlo)."
+          }
+        }
+      }
+    },
+    "Buttons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botones"
+          }
+        }
+      }
+    },
+    "Check for Updates…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar actualizaciones…"
+          }
+        }
+      }
+    },
+    "Couldn’t create a log in %@.": {
+      "comment": "Error note when the diagnostics log file couldn't be opened. %@ is a folder path.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo crear un registro en %@."
+          }
+        }
+      }
+    },
+    "Couldn’t export settings": {
+      "comment": "Alert title when writing the settings JSON failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron exportar los ajustes"
+          }
+        }
+      }
+    },
+    "Couldn’t import settings": {
+      "comment": "Alert title when reading the settings JSON failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron importar los ajustes"
+          }
+        }
+      }
+    },
+    "Couldn’t install the event tap — grant Accessibility so clicks can post.": {
+      "comment": "Status pane, Recent issue: the CGEvent tap failed to install.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo instalar el interceptor de eventos. Concede Accesibilidad para que se envíen los clics."
+          }
+        }
+      }
+    },
+    "Couldn’t turn off Open at Login: %@": {
+      "comment": "Error note when unregistering the login item failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo desactivar «Abrir al iniciar sesión»: %@"
+          }
+        }
+      }
+    },
+    "Couldn’t turn on Open at Login: %@": {
+      "comment": "Error note when registering the login item failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo activar «Abrir al iniciar sesión»: %@"
+          }
+        }
+      }
+    },
+    "Device": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo"
+          }
+        }
+      }
+    },
+    "Disable MagicButtons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar MagicButtons"
+          }
+        }
+      }
+    },
+    "Disabled": {
+      "comment": "Menu status line: switched off by the user.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado"
+          }
+        }
+      }
+    },
+    "Double-tap gap": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervalo del toque doble"
+          }
+        }
+      }
+    },
+    "Drag": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastre"
+          }
+        }
+      }
+    },
+    "Drag style": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estilo de arrastre"
+          }
+        }
+      }
+    },
+    "Enable MagicButtons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar MagicButtons"
+          }
+        }
+      }
+    },
+    "Export MagicButtons Settings": {
+      "comment": "Save-panel title. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar los ajustes de MagicButtons"
+          }
+        }
+      }
+    },
+    "Export a JSON file to copy your settings to another Mac.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporta un archivo JSON para copiar tus ajustes a otro Mac."
+          }
+        }
+      }
+    },
+    "Export…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar…"
+          }
+        }
+      }
+    },
+    "Features": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funciones"
+          }
+        }
+      }
+    },
+    "Finish setup": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar la configuración"
+          }
+        }
+      }
+    },
+    "Fix %@…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corregir %@…"
+          }
+        }
+      }
+    },
+    "Grant…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conceder…"
+          }
+        }
+      }
+    },
+    "Hold one finger still, then move the mouse to drag — no first tap, so text and small handles stay precise. Grip the mouse from the sides and keep the top surface clear except when tapping or dragging: a finger left resting on the shell starts a drag, and clicking the mouse won’t register until it lifts.": {
+      "comment": "Explainer under the Drag style picker for the press-and-hold option.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén un dedo quieto y luego mueve el ratón para arrastrar: sin toque previo, así el texto y los tiradores pequeños se mantienen precisos. Sujeta el ratón por los lados y deja libre la superficie superior salvo al tocar o arrastrar: un dedo apoyado en la carcasa inicia un arrastre, y el clic del ratón no se registrará hasta que lo levantes."
+          }
+        }
+      }
+    },
+    "Hold threshold": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbral de mantenimiento"
+          }
+        }
+      }
+    },
+    "Homepage": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Página web"
+          }
+        }
+      }
+    },
+    "Ignore taps during a physical click": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignorar los toques durante un clic físico"
+          }
+        }
+      }
+    },
+    "Import MagicButtons Settings": {
+      "comment": "Open-panel title. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar los ajustes de MagicButtons"
+          }
+        }
+      }
+    },
+    "Import…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar…"
+          }
+        }
+      }
+    },
+    "Keep MagicButtons running so it’s ready right after you restart.": {
+      "comment": "Explainer under the Open at Login toggle.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén MagicButtons en marcha para que esté listo justo después de reiniciar."
+          }
+        }
+      }
+    },
+    "Left edge": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde izquierdo"
+          }
+        }
+      }
+    },
+    "Magic Mouse — connected": {
+      "comment": "Status pane, Device row. 'Magic Mouse' is a product name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Mouse: conectado"
+          }
+        }
+      }
+    },
+    "Magic Mouse — connected, receiving touches": {
+      "comment": "Status pane, Device row. 'Magic Mouse' is a product name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Mouse: conectado y recibiendo toques"
+          }
+        }
+      }
+    },
+    "MagicButtons Settings": {
+      "comment": "Settings window title. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes de MagicButtons"
+          }
+        }
+      }
+    },
+    "MagicButtons — Visualizer": {
+      "comment": "Visualizer window title. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MagicButtons: visualizador"
+          }
+        }
+      }
+    },
+    "Max contact size": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamaño máximo del contacto"
+          }
+        }
+      }
+    },
+    "Max tap duration": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración máxima del toque"
+          }
+        }
+      }
+    },
+    "Max tap travel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplazamiento máximo del toque"
+          }
+        }
+      }
+    },
+    "Middle physical click": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic físico central"
+          }
+        }
+      }
+    },
+    "Middle tap to click": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque central para hacer clic"
+          }
+        }
+      }
+    },
+    "Missing: %@": {
+      "comment": "Menu status line listing permissions not yet granted.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta: %@"
+          }
+        }
+      }
+    },
+    "Multitouch backend unavailable — unsupported macOS build.": {
+      "comment": "Status pane, Backend row: the private backend didn't load.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backend multitáctil no disponible: versión de macOS no compatible."
+          }
+        }
+      }
+    },
+    "Multitouch stream healthy — frames flowing.": {
+      "comment": "Status pane, Backend row: touch frames are arriving.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flujo multitáctil correcto: se reciben fotogramas."
+          }
+        }
+      }
+    },
+    "No Magic Mouse connected.": {
+      "comment": "Status pane, Backend row. 'Magic Mouse' is a product name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ningún Magic Mouse conectado."
+          }
+        }
+      }
+    },
+    "No Magic Mouse detected": {
+      "comment": "Menu status line: no device. 'Magic Mouse' is a product name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se detecta ningún Magic Mouse"
+          }
+        }
+      }
+    },
+    "No Magic Mouse was found. Connect one and it’ll be picked up automatically.": {
+      "comment": "Status pane, Recent issue. 'Magic Mouse' is a product name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se encontró ningún Magic Mouse. Conecta uno y se detectará automáticamente."
+          }
+        }
+      }
+    },
+    "Open Settings…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes…"
+          }
+        }
+      }
+    },
+    "Open Visualizer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el visualizador"
+          }
+        }
+      }
+    },
+    "Open at Login": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir al iniciar sesión"
+          }
+        }
+      }
+    },
+    "Permissions": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permisos"
+          }
+        }
+      }
+    },
+    "Physically click while your finger is in the middle zone to emit a middle click.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic físicamente con el dedo en la zona central para enviar un clic central."
+          }
+        }
+      }
+    },
+    "Press and hold": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener pulsado"
+          }
+        }
+      }
+    },
+    "Quit & Reopen MagicButtons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salir y volver a abrir MagicButtons"
+          }
+        }
+      }
+    },
+    "Quit & Reopen to Finish Setup": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salir y volver a abrir para terminar la configuración"
+          }
+        }
+      }
+    },
+    "Quit & Reopen to finish setup": {
+      "comment": "Menu status line: a relaunch is needed to apply a new grant.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sal y vuelve a abrir para terminar la configuración"
+          }
+        }
+      }
+    },
+    "Quit MagicButtons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salir de MagicButtons"
+          }
+        }
+      }
+    },
+    "Recent issue": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Problema reciente"
+          }
+        }
+      }
+    },
+    "Record a troubleshooting log": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabar un registro de diagnóstico"
+          }
+        }
+      }
+    },
+    "Recording stopped automatically after %lld minutes.": {
+      "comment": "Why a diagnostics recording ended on its own (time limit).",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Recording stopped automatically after %lld minute."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Recording stopped automatically after %lld minutes."
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "La grabación se detuvo automáticamente después de %lld minuto."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "La grabación se detuvo automáticamente después de %lld minutos."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Recording stopped automatically — the log reached %lld MB.": {
+      "comment": "Why a diagnostics recording ended on its own (size limit). MB = megabytes.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La grabación se detuvo automáticamente: el registro alcanzó %lld MB."
+          }
+        }
+      }
+    },
+    "Recording — reproduce the problem, then turn this off and attach the log to your bug report.": {
+      "comment": "Troubleshooting help while recording, with no auto-stop time known.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabando: reproduce el problema, después desactiva esto y adjunta el registro a tu informe de error."
+          }
+        }
+      }
+    },
+    "Recording — reproduce the problem, then turn this off and attach the log to your bug report. Stops on its own at %@.": {
+      "comment": "Troubleshooting help while recording; %@ is a locale-formatted clock time.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabando: reproduce el problema, después desactiva esto y adjunta el registro a tu informe de error. Se detendrá automáticamente a las %@."
+          }
+        }
+      }
+    },
+    "Reset to Defaults": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer los valores por omisión"
+          }
+        }
+      }
+    },
+    "Reveal in Finder…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar en el Finder…"
+          }
+        }
+      }
+    },
+    "Right edge": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde derecho"
+          }
+        }
+      }
+    },
+    "Settings file": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo de ajustes"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes…"
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado"
+          }
+        }
+      }
+    },
+    "Tap the left or right zone to click that button.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca la zona izquierda o derecha para hacer clic con ese botón."
+          }
+        }
+      }
+    },
+    "Tap the middle zone to emit a middle click.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca la zona central para enviar un clic central."
+          }
+        }
+      }
+    },
+    "Tap to click": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocar para hacer clic"
+          }
+        }
+      }
+    },
+    "Tap, then press and hold a second time and move the mouse to drag. Deliberate and familiar from the trackpad; a drag on text starts by selecting the word under the pointer. Fingers can rest on the shell.": {
+      "comment": "Explainer under the Drag style picker for the tap-and-a-half option.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca y, a continuación, mantén pulsado por segunda vez y mueve el ratón para arrastrar. Es deliberado y resulta familiar por el trackpad; al arrastrar sobre texto se empieza seleccionando la palabra bajo el puntero. Puedes apoyar los dedos en la carcasa."
+          }
+        }
+      }
+    },
+    "Tap-and-a-half": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque y medio"
+          }
+        }
+      }
+    },
+    "The Magic Mouse is connected but no touches are arriving, and reconnecting didn’t help — Quit & Reopen MagicButtons.": {
+      "comment": "Status pane, Recent issue: the deaf-stream case. Product/app names — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El Magic Mouse está conectado pero no llegan toques, y volver a conectarlo no ha servido. Sal y vuelve a abrir MagicButtons."
+          }
+        }
+      }
+    },
+    "The log records which zone your finger touches, the gestures recognized, and their timings. It never records text, cursor positions, or key presses.": {
+      "comment": "Troubleshooting section footer stating what the log does and doesn't capture.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El registro guarda qué zona toca tu dedo, los gestos reconocidos y sus tiempos. Nunca guarda texto, posiciones del cursor ni pulsaciones de teclas."
+          }
+        }
+      }
+    },
+    "The multitouch backend didn’t load on this macOS build. An update to MagicButtons may be required.": {
+      "comment": "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El backend multitáctil no se cargó en esta versión de macOS. Puede que sea necesario actualizar MagicButtons."
+          }
+        }
+      }
+    },
+    "The multitouch backend is unavailable on this macOS build.": {
+      "comment": "Status pane, Recent issue: backend missing on this OS build.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El backend multitáctil no está disponible en esta versión de macOS."
+          }
+        }
+      }
+    },
+    "The multitouch stream reported it isn’t authorized. Try relaunching MagicButtons.": {
+      "comment": "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El flujo multitáctil informó de que no está autorizado. Prueba a reiniciar MagicButtons."
+          }
+        }
+      }
+    },
+    "The visualizer works; grant Accessibility so clicks can post.": {
+      "comment": "Features pane header: partial capability without the Accessibility grant.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El visualizador funciona; concede Accesibilidad para que se envíen los clics."
+          }
+        }
+      }
+    },
+    "Timings & thresholds": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempos y umbrales"
+          }
+        }
+      }
+    },
+    "Troubleshooting": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnóstico"
+          }
+        }
+      }
+    },
+    "Turn MagicButtons on in System Settings → General → Login Items.": {
+      "comment": "Shown when the login item needs the user's approval in System Settings.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa MagicButtons en Ajustes del Sistema → General → Ítems de inicio de sesión."
+          }
+        }
+      }
+    },
+    "Turn this on, reproduce the problem, then turn it off and attach the log to your bug report. Recording stops on its own after %lld minutes.": {
+      "comment": "Troubleshooting help while not recording; %lld is a number of minutes.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Turn this on, reproduce the problem, then turn it off and attach the log to your bug report. Recording stops on its own after %lld minute."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Turn this on, reproduce the problem, then turn it off and attach the log to your bug report. Recording stops on its own after %lld minutes."
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Actívalo, reproduce el problema, después desactívalo y adjunta el registro a tu informe de error. La grabación se detiene automáticamente después de %lld minuto."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Actívalo, reproduce el problema, después desactívalo y adjunta el registro a tu informe de error. La grabación se detiene automáticamente después de %lld minutos."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Unavailable on this macOS build": {
+      "comment": "Status pane, Device row: multitouch backend missing.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No disponible en esta versión de macOS"
+          }
+        }
+      }
+    },
+    "Unsupported macOS build — multitouch unavailable": {
+      "comment": "Menu status line: the private multitouch backend didn't load.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión de macOS no compatible: multitáctil no disponible"
+          }
+        }
+      }
+    },
+    "Version %@": {
+      "comment": "About card version line when the build number matches the marketing version.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión %@"
+          }
+        }
+      }
+    },
+    "Version %@ (%@)": {
+      "comment": "About card version line: first %@ is the marketing version, second is the build number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Version %1$@ (%2$@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión %@ (%@)"
+          }
+        }
+      }
+    },
+    "Zones": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zonas"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

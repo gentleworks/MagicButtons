@@ -51,9 +51,11 @@ struct AboutView: View {
     private static var versionLine: String {
         let short = info("CFBundleShortVersionString") ?? "—"
         if let build = info("CFBundleVersion"), build != short {
-            return "Version \(short) (\(build))"
+            return String(localized: "Version \(short) (\(build))",
+                          comment: "About card version line: first %@ is the marketing version, second is the build number.")
         }
-        return "Version \(short)"
+        return String(localized: "Version \(short)",
+                      comment: "About card version line when the build number matches the marketing version.")
     }
 
     private static var copyright: String? { info("NSHumanReadableCopyright") }

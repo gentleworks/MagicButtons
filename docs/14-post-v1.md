@@ -674,3 +674,111 @@ a `--publish` run.
 The pattern worth carrying: **a check that can't run should not look like a check that
 passed.** #3 was invisible precisely because its skip path and its success path printed the
 same thing.
+
+## Localization — String Catalogs + Spanish ✅ *(done; hardware-free)*
+
+The UI ships in English and Spanish. Nothing about the gesture pipeline changed; this is
+presentation only, but it reaches into two package targets because that's where some
+user-visible copy already lived.
+
+### Three catalogs, because strings live in three bundles
+
+| Catalog | Owns | Lookup |
+|---|---|---|
+| `AppShell/Localizable.xcstrings` | the views + every `AppModel` status/error line | `.main`, implicit |
+| `Sources/AppCore/Resources/Localizable.xcstrings` | `Permission.title` / `.rationale` / `.fixInstruction` | `bundle: #bundle` |
+| `Sources/Visualizer/Resources/Localizable.xcstrings` | flash badge, zone caption, contact count | `bundle: #bundle` |
+
+The two package targets need `defaultLocalization: "en"` on the `Package(...)` and
+`resources: [.process("Resources")]` on the target, or the catalog is not a resource and
+the lookup silently returns the key. `#bundle` (Xcode 26) replaces the older
+`Bundle.module` dance and is what both package targets use.
+
+### `GestureFlash` carries a gesture, not a word
+
+`VisualizerModel.GestureFlash` used to hold a pre-worded `title: String` ("Tap",
+"Double-tap", `"\(count)× tap"`). A model that has already chosen English can't be
+localized at the view, so it now carries `kind: .tap(count:)` / `.hold` and
+`VisualizerView` picks the wording. This follows the same rule as the `y`-flip: the
+display decision happens at the drawing boundary. The three tests that asserted on the
+English title now assert on the case, which is also locale-independent — they would have
+started failing on a Spanish-locale machine otherwise.
+
+### Traps found, in the order they bite
+
+**1. `Text(someString)` is the *verbatim* overload and is never extracted.** Two real
+instances existed and both looked perfectly localizable:
+
+```swift
+Text("… the gestures recognized, "        // ❌ `+` makes it a String expression
+     + "and their timings. …")            //    → verbatim, never reaches the catalog
+Text(model.launchAtLoginNote ?? "Keep …") // ❌ `??` yields String → same trap
+```
+
+Only a bare literal binds `LocalizedStringKey`. A concatenation or a `??` default must go
+through `String(localized:)` explicitly. Nothing warns; the string just quietly stays
+English forever. The same applies to any helper typed `_ title: String` — the `slider(…)`
+helper in Advanced took one, so its labels were unlocalizable until the parameter became
+`LocalizedStringKey`.
+
+**2. `xcodebuild` does not write extracted strings back into the catalog.** The compiler
+emits `.stringsdata` per file, but merging them into the `.xcstrings` is an Xcode *IDE*
+behaviour — a headless build leaves the catalog untouched and silently ships whatever is
+already in it. The IDE-free equivalent, and what was used to populate all 96 keys with
+their true format specifiers (`%lld` vs `%@`, which are easy to guess wrong by hand):
+
+```sh
+xcrun xcstringstool sync AppShell/Localizable.xcstrings \
+  --stringsdata $(find "$DERIVED_DATA/…/MagicButtons.build" -name '*.stringsdata')
+```
+
+**3. `swift build` copies `.xcstrings` instead of compiling it.** The SwiftPM CLI drops
+the raw catalog into the resource bundle with no `.lproj` output, so `swift test` and
+`mb-dev` always resolve English. Only the Xcode build runs the catalog compile. That's
+harmless — the shipping app is built through Xcode — but it means the CLI is not where
+you verify a translation.
+
+**4. `knownRegions` is *not* what gates the output.** With `knownRegions = (Base, en)` the
+Spanish `es.lproj` was still produced and `Bundle.localizations` still reported
+`["en", "es"]`; the languages in the catalog are what matter. It's set anyway
+(`options.knownRegions` in `project.yml`, supported by XcodeGen 2.46) so the IDE's
+localization list matches reality — but don't reach for it when a translation goes
+missing, it won't be the cause.
+
+### Locale-aware formatting
+
+The Advanced pane formatted its readouts with `String(format: "%.1f")` and a hand-written
+`%`, which prints an English decimal point everywhere — `14.0` where Spanish wants `14,0`.
+Now `.formatted(.percent…)`, `.formatted(.number…)`, and a `Measurement<UnitDuration>` with
+`usage: .asProvided` (without which milliseconds get auto-promoted to seconds).
+
+### Verified
+
+`swift test` 236 green; a Debug build produces `en.lproj` + `es.lproj` in the app and in
+both package bundles, with the contact count compiled to a real plural `stringsdict`.
+Confirmed in the running app with the language set to Spanish (2026-07-29): the
+translations read correctly and nothing truncates or reflows badly — worth stating
+because Spanish runs 15–25% longer than English and the Settings window is capped at
+640pt, so the two drag-style explainers and the troubleshooting footer were the expected
+failure points and neither moved.
+
+### Testing a language — don't reach for the per-app picker first
+
+System Settings → General → Language & Region → Applications resolves an app by **bundle
+identifier**, through Launch Services — not by the bundle you just built. With a released
+copy in `/Applications` sharing `com.gentleworks.MagicButtons`, the picker offers *that*
+one's languages, so a correctly localized fresh build shows "English only" and looks
+broken. `Bundle(path:).localizations` on each candidate tells them apart in seconds:
+
+```swift
+Bundle(path: "…/Debug/MagicButtons.app")!.localizations   // ["en", "es"]
+Bundle(path: "/Applications/MagicButtons.app")!.localizations  // ["en"]  ← the one it showed
+```
+
+Test through the scheme instead — Edit Scheme → Run → Options → App Language — or run the
+built binary with `-AppleLanguages '(es)'`. Quit the menu-bar instance first either way:
+two copies means two `CGEventTap`s both synthesizing clicks (§Interceptor lifetime).
+
+No `CFBundleLocalizations` key is required — the `.lproj` directories are authoritative.
+Adding one is a common suggestion for this symptom and the wrong fix: it buys nothing and
+leaves a hand-maintained language list to drift out of sync with the catalogs.

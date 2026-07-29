@@ -11,6 +11,11 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  # Source language for the String Catalogs (AppShell/Localizable.xcstrings, plus one
+  # each in the AppCore and Visualizer package targets). Shipping languages are listed
+  # in the catalogs themselves and mirrored into `knownRegions` below.
+  developmentLanguage: en
+  knownRegions: [en, es]
 
 # The whole repo is a local SwiftPM package; the app links its library products.
 # Sparkle is added ONLY here (the app target), never in Package.swift — the pure,
@@ -80,6 +85,11 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
+        # Localization (docs/09 §Settings UI). The compiler extracts every `Text(…)` /
+        # `String(localized:)` into AppShell/Localizable.xcstrings on build, so the
+        # catalog stays in sync with the code rather than being maintained by hand.
+        SWIFT_EMIT_LOC_STRINGS: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
         # LSUIElement lives in the Info.plist; no Dock icon, no default window.
 
 schemes:

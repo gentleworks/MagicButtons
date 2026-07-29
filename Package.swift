@@ -13,6 +13,10 @@ import PackageDescription
 // dependency graph compiles and links.
 let package = Package(
     name: "MagicButtons",
+    // Required for any target to carry localized resources. The two targets that own
+    // user-visible text (AppCore's permission copy, Visualizer's badge/caption) ship a
+    // String Catalog; everything else stays resource-free.
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "TouchKit", targets: ["TouchKit"]),
@@ -49,14 +53,16 @@ let package = Package(
         .target(name: "EventOutput", dependencies: ["TouchKit"]),
 
         // SwiftUI finger/zone graphic.
-        .target(name: "Visualizer", dependencies: ["TouchKit"]),
+        .target(name: "Visualizer", dependencies: ["TouchKit"],
+                resources: [.process("Resources")]),
 
         // Package-side App-layer logic — pure, testable composition pieces the
         // thin Xcode app target and the executable harness both consume: feature
         // policy (Phase 7.1), settings persistence (Phase 7.2). Keeps App-layer
         // logic in SwiftPM/CI rather than the untestable executable
         // (docs/01-architecture.md §Composition root, docs/12-project-setup.md).
-        .target(name: "AppCore", dependencies: ["TouchKit", "GestureEngine", "EventOutput"]),
+        .target(name: "AppCore", dependencies: ["TouchKit", "GestureEngine", "EventOutput"],
+                resources: [.process("Resources")]),
 
         // Composition root (scaffold stub for now — see note above).
         .executableTarget(

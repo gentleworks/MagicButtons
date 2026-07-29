@@ -75,22 +75,18 @@ struct AdvancedSettingsView: View {
     private var dragStyleHelp: String {
         switch model.settings.gestures.dragStyle {
         case .tapAndAHalf:
-            return "Tap, then press and hold a second time and move the mouse to drag. "
-                + "Deliberate and familiar from the trackpad; a drag on text starts by "
-                + "selecting the word under the pointer. Fingers can rest on the shell."
+            return String(localized: "Tap, then press and hold a second time and move the mouse to drag. Deliberate and familiar from the trackpad; a drag on text starts by selecting the word under the pointer. Fingers can rest on the shell.",
+                          comment: "Explainer under the Drag style picker for the tap-and-a-half option.")
         case .pressAndHold:
-            return "Hold one finger still, then move the mouse to drag — no first tap, so "
-                + "text and small handles stay precise. Grip the mouse from the sides and "
-                + "keep the top surface clear except when tapping or dragging: a finger "
-                + "left resting on the shell starts a drag, and clicking the mouse won't "
-                + "register until it lifts."
+            return String(localized: "Hold one finger still, then move the mouse to drag — no first tap, so text and small handles stay precise. Grip the mouse from the sides and keep the top surface clear except when tapping or dragging: a finger left resting on the shell starts a drag, and clicking the mouse won’t register until it lifts.",
+                          comment: "Explainer under the Drag style picker for the press-and-hold option.")
         }
     }
 
     // MARK: Labeled slider
 
     private func slider<V: BinaryFloatingPoint>(
-        _ title: String,
+        _ title: LocalizedStringKey,
         _ value: Binding<V>,
         in range: ClosedRange<V>,
         format: @escaping (V) -> String
@@ -111,13 +107,17 @@ struct AdvancedSettingsView: View {
 
     // MARK: Value formatting
 
+    // Locale-aware throughout: `String(format:)` and a hardcoded "%" would print an
+    // English decimal point and symbol placement everywhere. `.asProvided` keeps
+    // milliseconds from being auto-promoted to seconds.
     private func percent<V: BinaryFloatingPoint>(_ v: V) -> String {
-        "\(Int((Double(v) * 100).rounded()))%"
+        Double(v).formatted(.percent.precision(.fractionLength(0)))
     }
     private func seconds<V: BinaryFloatingPoint>(_ v: V) -> String {
-        String(format: "%.0f ms", Double(v) * 1000)
+        Measurement(value: (Double(v) * 1000).rounded(), unit: UnitDuration.milliseconds)
+            .formatted(.measurement(width: .abbreviated, usage: .asProvided))
     }
     private func number<V: BinaryFloatingPoint>(_ v: V) -> String {
-        String(format: "%.1f", Double(v))
+        Double(v).formatted(.number.precision(.fractionLength(1)))
     }
 }

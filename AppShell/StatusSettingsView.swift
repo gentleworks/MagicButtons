@@ -74,9 +74,11 @@ struct StatusSettingsView: View {
             Text("Troubleshooting")
         } footer: {
             // The privacy claim is the reason this is attachable to a public bug report, so
-            // it's stated plainly rather than left for the user to wonder about.
-            Text("The log records which zone your finger touches, the gestures recognized, "
-                 + "and their timings. It never records text, cursor positions, or key presses.")
+            // it's stated plainly rather than left for the user to wonder about. One literal,
+            // not a `+` join: a concatenation picks Text's verbatim overload and never
+            // reaches the String Catalog at all.
+            Text("The log records which zone your finger touches, the gestures recognized, and their timings. It never records text, cursor positions, or key presses.",
+                 comment: "Troubleshooting section footer stating what the log does and doesn't capture.")
         }
     }
 
@@ -88,16 +90,19 @@ struct StatusSettingsView: View {
     /// deadline answers and a duration makes you compute. It's a fixed instant, so stating
     /// it needs no countdown ticking into the view.
     private var recordingHelp: String {
-        if model.isRecordingDiagnostics {
-            let stops = model.diagnosticsAutoStopAt.map {
-                " Stops on its own at \($0.formatted(date: .omitted, time: .shortened))."
-            } ?? ""
-            return "Recording — reproduce the problem, then turn this off and attach the log "
-                + "to your bug report." + stops
+        guard model.isRecordingDiagnostics else {
+            return String(localized: "Turn this on, reproduce the problem, then turn it off and attach the log to your bug report. Recording stops on its own after \(model.diagnosticsAutoStopMinutes) minutes.",
+                          comment: "Troubleshooting help while not recording; %lld is a number of minutes.")
         }
-        return "Turn this on, reproduce the problem, then turn it off and attach the log to "
-            + "your bug report. Recording stops on its own after "
-            + "\(model.diagnosticsAutoStopMinutes) minutes."
+        // Each state is one whole sentence pair rather than a stem plus an appended
+        // fragment — a trailing clause can't be placed correctly in every language.
+        guard let stopsAt = model.diagnosticsAutoStopAt else {
+            return String(localized: "Recording — reproduce the problem, then turn this off and attach the log to your bug report.",
+                          comment: "Troubleshooting help while recording, with no auto-stop time known.")
+        }
+        let time = stopsAt.formatted(date: .omitted, time: .shortened)
+        return String(localized: "Recording — reproduce the problem, then turn this off and attach the log to your bug report. Stops on its own at \(time).",
+                      comment: "Troubleshooting help while recording; %@ is a locale-formatted clock time.")
     }
 
     // MARK: Permission row
@@ -136,14 +141,18 @@ struct StatusSettingsView: View {
 
     private var backendText: String {
         if model.backendUnavailable {
-            return "Multitouch backend unavailable — unsupported macOS build."
+            return String(localized: "Multitouch backend unavailable — unsupported macOS build.",
+                          comment: "Status pane, Backend row: the private backend didn't load.")
         }
         if !model.isDeviceConnected {
-            return "No Magic Mouse connected."
+            return String(localized: "No Magic Mouse connected.",
+                          comment: "Status pane, Backend row. 'Magic Mouse' is a product name — do not translate.")
         }
         return model.isReceivingTouches
-            ? "Multitouch stream healthy — frames flowing."
-            : "Backend ready — no frames yet (touch the mouse to confirm)."
+            ? String(localized: "Multitouch stream healthy — frames flowing.",
+                     comment: "Status pane, Backend row: touch frames are arriving.")
+            : String(localized: "Backend ready — no frames yet (touch the mouse to confirm).",
+                     comment: "Status pane, Backend row: connected but no frames seen yet.")
     }
 
     private var backendSymbol: String {

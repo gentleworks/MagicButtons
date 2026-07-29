@@ -8,3 +8,7 @@ published notes live with the build, not here. Deliberately not version-named: t
 reads the version from the build, and a version in the filename would assert a release
 that hasn't happened. See docs/07 §Release notes.
 -->
+
+MagicButtons now speaks Spanish. The menu, Settings, the visualizer, and every status and
+error message follow your Mac's language, and numbers, times, and durations are formatted
+the way your region writes them.

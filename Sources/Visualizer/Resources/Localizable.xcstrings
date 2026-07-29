@@ -1,0 +1,135 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld contacts" : {
+      "comment" : "Number of fingers currently on the mouse surface.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contact"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contacts"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contacto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contactos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld× tap" : {
+      "comment" : "Badge for three or more rapid taps, e.g. '3× tap'.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque ×%lld"
+          }
+        }
+      }
+    },
+    "Active: %@" : {
+      "comment" : "Caption naming the zone the finger is currently in.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zona activa: %@"
+          }
+        }
+      }
+    },
+    "Double-tap" : {
+      "comment" : "Badge shown when a double tap registers.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque doble"
+          }
+        }
+      }
+    },
+    "Hold" : {
+      "comment" : "Badge shown when a press-and-hold registers.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener"
+          }
+        }
+      }
+    },
+    "left" : {
+      "comment" : "Left zone of the mouse surface.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "izquierda"
+          }
+        }
+      }
+    },
+    "middle" : {
+      "comment" : "Middle zone of the mouse surface.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "centro"
+          }
+        }
+      }
+    },
+    "right" : {
+      "comment" : "Right zone of the mouse surface.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "derecha"
+          }
+        }
+      }
+    },
+    "Tap" : {
+      "comment" : "Badge shown when a single tap registers.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

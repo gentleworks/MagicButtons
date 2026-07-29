@@ -35,9 +35,17 @@ public final class VisualizerModel {
     /// visible feedback that a tap / double-tap fired (docs/09 §Advanced). `id`
     /// increments per event so the view can re-trigger its animation on repeats.
     public struct GestureFlash: Identifiable, Equatable, Sendable {
+        /// *What* registered, kept semantic rather than pre-worded: the badge's wording
+        /// is chosen — and localized — at the drawing boundary (`VisualizerView`), the
+        /// same rule the `y`-flip follows. Keeps the model free of display copy.
+        public enum Kind: Equatable, Sendable {
+            case tap(count: Int)
+            case hold
+        }
+
         public let id: Int
         public let zone: MouseZone
-        public let title: String
+        public let kind: Kind
     }
 
     /// The most recent recognized gesture, or `nil` once it has aged out. Read-only;
@@ -81,22 +89,17 @@ public final class VisualizerModel {
         flashCounter += 1
 
         let zone: MouseZone
-        let title: String
+        let kind: GestureFlash.Kind
         switch gesture {
         case let .click(z, count):
-            zone = z
-            switch count {
-            case 1:  title = "Tap"
-            case 2:  title = "Double-tap"
-            default: title = "\(count)× tap"
-            }
+            zone = z; kind = .tap(count: count)
         case let .holdBegan(z):
-            zone = z; title = "Hold"
+            zone = z; kind = .hold
         case .holdEnded:
             lastFlash = nil
             return
         }
-        lastFlash = GestureFlash(id: flashCounter, zone: zone, title: title)
+        lastFlash = GestureFlash(id: flashCounter, zone: zone, kind: kind)
 
         let shownID = flashCounter
         flashClearTask = Task { @MainActor [weak self] in

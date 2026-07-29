@@ -1,0 +1,39 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Accessibility" : {
+      "comment" : "Name of the System Settings privacy pane the app needs.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accesibilidad"
+          }
+        }
+      }
+    },
+    "Enable MagicButtons under Accessibility." : {
+      "comment" : "What to do once the deep link opens System Settings. 'MagicButtons' is the app name — do not translate.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa MagicButtons en Accesibilidad."
+          }
+        }
+      }
+    },
+    "Post synthesized mouse-button clicks." : {
+      "comment" : "Why the app needs Accessibility; shown under a granted permission.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar clics sintetizados de los botones del ratón."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

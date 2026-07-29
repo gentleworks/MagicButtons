@@ -26,7 +26,11 @@ struct FeaturesSettingsView: View {
                     .toggleStyle(.switch)
                 // Shows the default explainer, and swaps to the orange approval/error note
                 // when the login item needs attention — mirroring the capability line above.
-                Text(model.launchAtLoginNote ?? "Keep MagicButtons running so it’s ready right after you restart.")
+                // The default must go through `String(localized:)`: `??` yields a String,
+                // which binds Text's verbatim overload and would never be extracted.
+                Text(model.launchAtLoginNote
+                     ?? String(localized: "Keep MagicButtons running so it’s ready right after you restart.",
+                               comment: "Explainer under the Open at Login toggle."))
                     .font(.footnote)
                     .foregroundStyle(model.launchAtLoginNote == nil ? Color.secondary : Color.orange)
             }

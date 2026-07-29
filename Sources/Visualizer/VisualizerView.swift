@@ -54,7 +54,7 @@ public struct VisualizerView: View {
     @ViewBuilder
     private var flashBadge: some View {
         if let flash = model.lastFlash {
-            Text(flash.title)
+            badgeLabel(flash.kind)
                 .font(.caption.bold())
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
@@ -63,6 +63,22 @@ public struct VisualizerView: View {
                 .padding(.top, 8)
                 .id(flash.id)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
+        }
+    }
+
+    /// One and two taps get their own names because that's how people say them; beyond
+    /// that the count carries the meaning, so a single counted string covers the tail.
+    private func badgeLabel(_ kind: VisualizerModel.GestureFlash.Kind) -> Text {
+        switch kind {
+        case .hold:
+            return Text("Hold", bundle: #bundle, comment: "Badge shown when a press-and-hold registers.")
+        case .tap(1):
+            return Text("Tap", bundle: #bundle, comment: "Badge shown when a single tap registers.")
+        case .tap(2):
+            return Text("Double-tap", bundle: #bundle, comment: "Badge shown when a double tap registers.")
+        case let .tap(count):
+            return Text("\(count)× tap", bundle: #bundle,
+                        comment: "Badge for three or more rapid taps, e.g. '3× tap'.")
         }
     }
 
@@ -125,10 +141,14 @@ public struct VisualizerView: View {
 
     private var caption: some View {
         HStack(spacing: 12) {
-            Text("Active: \(title(model.activeZone))")
+            Text("Active: \(title(model.activeZone))", bundle: #bundle,
+                 comment: "Caption naming the zone the finger is currently in.")
                 .foregroundStyle(model.activeZone.map(color) ?? .secondary)
             Spacer()
-            Text("\(model.touches.count) contact\(model.touches.count == 1 ? "" : "s")")
+            // Counted, not hand-suffixed: the plural forms live in the String Catalog so
+            // languages that don't pluralize like English get their own variations.
+            Text("\(model.touches.count) contacts", bundle: #bundle,
+                 comment: "Number of fingers currently on the mouse surface.")
                 .foregroundStyle(.secondary)
         }
         .font(.callout.monospacedDigit())
@@ -152,12 +172,17 @@ public struct VisualizerView: View {
         }
     }
 
+    /// Lower-case on purpose — these read as the tail of "Active: …", not as headings.
     private func title(_ zone: MouseZone?) -> String {
         switch zone {
-        case .left: return "left"
-        case .middle: return "middle"
-        case .right: return "right"
-        case nil: return "—"
+        case .left:
+            return String(localized: "left", bundle: #bundle, comment: "Left zone of the mouse surface.")
+        case .middle:
+            return String(localized: "middle", bundle: #bundle, comment: "Middle zone of the mouse surface.")
+        case .right:
+            return String(localized: "right", bundle: #bundle, comment: "Right zone of the mouse surface.")
+        case nil:
+            return "—"   // em dash: no finger down; not translated
         }
     }
 }

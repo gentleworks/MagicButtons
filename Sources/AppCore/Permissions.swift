@@ -17,24 +17,31 @@ public enum Permission: String, Sendable, CaseIterable {
 }
 
 public extension Permission {
-    /// Pane name as it reads in System Settings.
+    /// Pane name as it reads in System Settings. Translations must match Apple's own
+    /// wording for the pane, since the copy's whole job is to send the user to it.
     var title: String {
         switch self {
-        case .accessibility: return "Accessibility"
+        case .accessibility:
+            return String(localized: "Accessibility", bundle: #bundle,
+                          comment: "Name of the System Settings privacy pane the app needs.")
         }
     }
 
     /// One line: *why* the app needs it (docs/07 table).
     var rationale: String {
         switch self {
-        case .accessibility: return "Post synthesized mouse-button clicks."
+        case .accessibility:
+            return String(localized: "Post synthesized mouse-button clicks.", bundle: #bundle,
+                          comment: "Why the app needs Accessibility; shown under a granted permission.")
         }
     }
 
     /// One line: *what to do* once the deep link opens the pane.
     var fixInstruction: String {
         switch self {
-        case .accessibility: return "Enable MagicButtons under Accessibility."
+        case .accessibility:
+            return String(localized: "Enable MagicButtons under Accessibility.", bundle: #bundle,
+                          comment: "What to do once the deep link opens System Settings. 'MagicButtons' is the app name — do not translate.")
         }
     }
 

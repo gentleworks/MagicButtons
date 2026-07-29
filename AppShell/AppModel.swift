@@ -437,7 +437,8 @@ final class AppModel {
         let enabled = loginItem.isEnabled
         launchAtLoginEnabled = enabled
         launchAtLoginNote = loginItem.status == .requiresApproval
-            ? "Turn MagicButtons on in System Settings → General → Login Items."
+            ? String(localized: "Turn MagicButtons on in System Settings → General → Login Items.",
+                     comment: "Shown when the login item needs the user's approval in System Settings.")
             : nil
         // Track external changes without churning the store when nothing moved.
         if settings.launchAtLogin != enabled {
@@ -453,8 +454,13 @@ final class AppModel {
             if enabled { try loginItem.enable() } else { try loginItem.disable() }
             launchAtLoginNote = nil
         } catch {
-            launchAtLoginNote = "Couldn’t \(enabled ? "enable" : "disable") Open at Login: "
-                + error.localizedDescription
+            // Two whole sentences rather than a spliced verb: languages don't agree on
+            // where the verb goes, so each branch has to be translatable end to end.
+            launchAtLoginNote = enabled
+                ? String(localized: "Couldn’t turn on Open at Login: \(error.localizedDescription)",
+                         comment: "Error note when registering the login item failed.")
+                : String(localized: "Couldn’t turn off Open at Login: \(error.localizedDescription)",
+                         comment: "Error note when unregistering the login item failed.")
         }
         // Persist intent even if the OS deferred it (e.g. requires approval); the mirror
         // then reflects the true post-call status.
@@ -502,8 +508,9 @@ final class AppModel {
     /// toggle being off costs a nil closure and nothing more.
     private func startDiagnostics() {
         guard let log = diagnostics.start(layout: settings.zones) else {
-            diagnosticsNote = "Couldn’t create a log in "
-                + DiagnosticsSession.defaultDirectory.path + "."
+            diagnosticsNote = String(
+                localized: "Couldn’t create a log in \(DiagnosticsSession.defaultDirectory.path).",
+                comment: "Error note when the diagnostics log file couldn't be opened. %@ is a folder path.")
             return
         }
         // Captured weakly on purpose: the session owns the log and clears it on stop, so a
@@ -537,10 +544,12 @@ final class AppModel {
             return nil
         case .timeLimit:
             let minutes = Int(diagnostics.limits.maxDuration / 60)
-            return "Recording stopped automatically after \(minutes) minutes."
+            return String(localized: "Recording stopped automatically after \(minutes) minutes.",
+                          comment: "Why a diagnostics recording ended on its own (time limit).")
         case .sizeLimit:
             let mb = diagnostics.limits.maxBytes / 1_000_000
-            return "Recording stopped automatically — the log reached \(mb) MB."
+            return String(localized: "Recording stopped automatically — the log reached \(mb) MB.",
+                          comment: "Why a diagnostics recording ended on its own (size limit). MB = megabytes.")
         }
     }
 
@@ -550,7 +559,8 @@ final class AppModel {
     /// between Macs). Uses the store's stable, pretty-printed encoding.
     func exportSettings() {
         let panel = NSSavePanel()
-        panel.title = "Export MagicButtons Settings"
+        panel.title = String(localized: "Export MagicButtons Settings",
+                             comment: "Save-panel title. 'MagicButtons' is the app name — do not translate.")
         panel.nameFieldStringValue = "MagicButtons-Settings.json"
         panel.allowedContentTypes = [.json]
         NSApp.activate(ignoringOtherApps: true)
@@ -558,7 +568,8 @@ final class AppModel {
         do {
             try store.exportJSON(settings).write(to: url)
         } catch {
-            presentError("Couldn’t export settings", error)
+            presentError(String(localized: "Couldn’t export settings",
+                                comment: "Alert title when writing the settings JSON failed."), error)
         }
     }
 
@@ -567,7 +578,8 @@ final class AppModel {
     /// surfaces an error rather than silently resetting (docs/09).
     func importSettings() {
         let panel = NSOpenPanel()
-        panel.title = "Import MagicButtons Settings"
+        panel.title = String(localized: "Import MagicButtons Settings",
+                             comment: "Open-panel title. 'MagicButtons' is the app name — do not translate.")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         NSApp.activate(ignoringOtherApps: true)
@@ -576,7 +588,8 @@ final class AppModel {
             let imported = try store.importJSON(Data(contentsOf: url))  // also persists
             sync(imported)
         } catch {
-            presentError("Couldn’t import settings", error)
+            presentError(String(localized: "Couldn’t import settings",
+                                comment: "Alert title when reading the settings JSON failed."), error)
         }
     }
 
@@ -608,7 +621,8 @@ final class AppModel {
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = "MagicButtons — Visualizer"
+        window.title = String(localized: "MagicButtons — Visualizer",
+                              comment: "Visualizer window title. 'MagicButtons' is the app name — do not translate.")
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: VisualizerView(model: visualizer))
         window.center()
@@ -631,7 +645,8 @@ final class AppModel {
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = "MagicButtons Settings"
+        window.title = String(localized: "MagicButtons Settings",
+                              comment: "Settings window title. 'MagicButtons' is the app name — do not translate.")
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SettingsView(model: self))
         window.contentMinSize = NSSize(width: 460, height: 480)
@@ -654,7 +669,8 @@ final class AppModel {
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false)
-        window.title = "About MagicButtons"
+        window.title = String(localized: "About MagicButtons",
+                              comment: "About window title. 'MagicButtons' is the app name — do not translate.")
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: AboutView())
         window.center()
@@ -736,15 +752,32 @@ final class AppModel {
 
     /// One-line status shown at the top of the menu.
     var statusSummary: String {
-        if backendUnavailable { return "Unsupported macOS build — multitouch unavailable" }
+        if backendUnavailable {
+            return String(localized: "Unsupported macOS build — multitouch unavailable",
+                          comment: "Menu status line: the private multitouch backend didn't load.")
+        }
         let missing = permissionsSnapshot.missing
         if !missing.isEmpty {
-            return "Missing: \(missing.map(\.title).joined(separator: ", "))"
+            // `.title` is itself localized; the names are joined then slotted in whole.
+            let names = ListFormatter.localizedString(byJoining: missing.map(\.title))
+            return String(localized: "Missing: \(names)",
+                          comment: "Menu status line listing permissions not yet granted.")
         }
-        if needsRelaunch { return "Quit & Reopen to finish setup" }
-        if interceptorFailed { return "Accessibility granted, but clicks aren’t posting" }
-        if !isDeviceConnected { return "No Magic Mouse detected" }
-        return isEnabled ? "Active" : "Disabled"
+        if needsRelaunch {
+            return String(localized: "Quit & Reopen to finish setup",
+                          comment: "Menu status line: a relaunch is needed to apply a new grant.")
+        }
+        if interceptorFailed {
+            return String(localized: "Accessibility granted, but clicks aren’t posting",
+                          comment: "Menu status line: permission is present but the event tap failed.")
+        }
+        if !isDeviceConnected {
+            return String(localized: "No Magic Mouse detected",
+                          comment: "Menu status line: no device. 'Magic Mouse' is a product name — do not translate.")
+        }
+        return isEnabled
+            ? String(localized: "Active", comment: "Menu status line: running normally.")
+            : String(localized: "Disabled", comment: "Menu status line: switched off by the user.")
     }
 
     // MARK: Status-pane readouts (docs/09 §Status & Diagnostics)
@@ -752,12 +785,19 @@ final class AppModel {
     /// One-line device summary. v1 reports connected/active + touch flow; per-device
     /// names + v1/v2 generation are Phase 9 (multi-mouse polish, docs/11).
     var deviceStatus: String {
-        if backendUnavailable { return "Unavailable on this macOS build" }
-        if isDeviceConnected {
-            return isReceivingTouches ? "Magic Mouse — connected, receiving touches"
-                                      : "Magic Mouse — connected"
+        if backendUnavailable {
+            return String(localized: "Unavailable on this macOS build",
+                          comment: "Status pane, Device row: multitouch backend missing.")
         }
-        return "No Magic Mouse detected"
+        if isDeviceConnected {
+            return isReceivingTouches
+                ? String(localized: "Magic Mouse — connected, receiving touches",
+                         comment: "Status pane, Device row. 'Magic Mouse' is a product name — do not translate.")
+                : String(localized: "Magic Mouse — connected",
+                         comment: "Status pane, Device row. 'Magic Mouse' is a product name — do not translate.")
+        }
+        return String(localized: "No Magic Mouse detected",
+                      comment: "Menu status line: no device. 'Magic Mouse' is a product name — do not translate.")
     }
 
     /// Plain-language capability line for the first-run / Features header, so a user
@@ -765,36 +805,49 @@ final class AppModel {
     /// rather than seeing silent failure (docs/07 step 4 — graceful degradation).
     var capabilitySummary: String {
         permissionsSnapshot.canPostClicks
-            ? "All features available."
-            : "The visualizer works; grant Accessibility so clicks can post."
+            ? String(localized: "All features available.",
+                     comment: "Features pane header: every capability is working.")
+            : String(localized: "The visualizer works; grant Accessibility so clicks can post.",
+                     comment: "Features pane header: partial capability without the Accessibility grant.")
     }
 
     /// The most relevant recent problem for the Status pane's Errors row, in plain
     /// language with a suggested action, or `nil` when nothing's wrong (docs/09).
     var recentIssue: String? {
         if backendUnavailable {
-            return "The multitouch backend didn’t load on this macOS build. An update to MagicButtons may be required."
+            return String(localized: "The multitouch backend didn’t load on this macOS build. An update to MagicButtons may be required.",
+                          comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
         }
         // Accessibility granted mid-run but the tap still won't install → a fresh
         // launch applies it (docs/07 step 3). Supersedes the generic tap message below.
         if needsRelaunch {
-            return "Accessibility was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks."
+            return String(localized: "Accessibility was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.",
+                          comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
         }
         if interceptorFailed {
-            return "Couldn’t install the event tap — grant Accessibility so clicks can post."
+            return String(localized: "Couldn’t install the event tap — grant Accessibility so clicks can post.",
+                          comment: "Status pane, Recent issue: the CGEvent tap failed to install.")
         }
         // Connected yet no touches arrive: the silent-failure "deaf" case that would
         // otherwise show no error at all (docs/08). Only reached once a physical click
         // has proved it and a re-subscription has already been tried, so the advice is
         // the next step up, not the first thing to try.
         if touchesNotArriving {
-            return "The Magic Mouse is connected but no touches are arriving, and reconnecting didn’t help — Quit & Reopen MagicButtons."
+            return String(localized: "The Magic Mouse is connected but no touches are arriving, and reconnecting didn’t help — Quit & Reopen MagicButtons.",
+                          comment: "Status pane, Recent issue: the deaf-stream case. Product/app names — do not translate.")
         }
         switch sourceError {
-        case .noDevice:      return "No Magic Mouse was found. Connect one and it’ll be picked up automatically."
-        case .backendUnavailable: return "The multitouch backend is unavailable on this macOS build."
-        case .notAuthorized: return "The multitouch stream reported it isn’t authorized. Try relaunching MagicButtons."
-        case nil:            return nil
+        case .noDevice:
+            return String(localized: "No Magic Mouse was found. Connect one and it’ll be picked up automatically.",
+                          comment: "Status pane, Recent issue. 'Magic Mouse' is a product name — do not translate.")
+        case .backendUnavailable:
+            return String(localized: "The multitouch backend is unavailable on this macOS build.",
+                          comment: "Status pane, Recent issue: backend missing on this OS build.")
+        case .notAuthorized:
+            return String(localized: "The multitouch stream reported it isn’t authorized. Try relaunching MagicButtons.",
+                          comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
+        case nil:
+            return nil
         }
     }
 }

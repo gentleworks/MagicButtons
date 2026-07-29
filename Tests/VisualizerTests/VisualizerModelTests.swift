@@ -73,22 +73,26 @@ import TouchKit
         #expect(VisualizerModel().lastFlash == nil)
     }
 
-    @Test func registerClickTitlesByCount() {
+    @Test func registerClickCarriesTheTapCount() {
         let model = VisualizerModel()
         model.register(.click(.left, count: 1))
-        #expect(model.lastFlash?.title == "Tap")
+        #expect(model.lastFlash?.kind == .tap(count: 1))
         #expect(model.lastFlash?.zone == .left)
 
         model.register(.click(.middle, count: 2))
-        #expect(model.lastFlash?.title == "Double-tap")
+        #expect(model.lastFlash?.kind == .tap(count: 2))
         #expect(model.lastFlash?.zone == .middle)
+
+        // Beyond a double the count passes through untouched — the view names it.
+        model.register(.click(.right, count: 3))
+        #expect(model.lastFlash?.kind == .tap(count: 3))
     }
 
     @Test func eachRegisterAdvancesTheFlashID() {
         let model = VisualizerModel()
         model.register(.click(.right, count: 1))
         let first = model.lastFlash?.id
-        model.register(.click(.right, count: 1))   // same title, new event
+        model.register(.click(.right, count: 1))   // same gesture, new event
         #expect(first != nil)
         #expect(model.lastFlash?.id != first)      // id advances so the view re-animates
     }
@@ -96,7 +100,7 @@ import TouchKit
     @Test func holdBeganFlashesHoldAndHoldEndedClears() {
         let model = VisualizerModel()
         model.register(.holdBegan(.right))
-        #expect(model.lastFlash?.title == "Hold")
+        #expect(model.lastFlash?.kind == .hold)
         model.register(.holdEnded(.right))
         #expect(model.lastFlash == nil)
     }
