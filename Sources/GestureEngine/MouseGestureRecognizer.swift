@@ -31,16 +31,11 @@ public final class MouseGestureRecognizer {
     }
 
     /// What we accumulate over a live contact to judge it against the tap rules
-    /// at `.ended`. Zone is captured once, at `.began`, so drift toward a
-    /// boundary never reassigns the button.
+    /// at `.ended`, plus the click-run bookkeeping that is the recognizer's alone.
+    /// The measurements live in the shared `ContactAccumulator` — one implementation
+    /// for the recognizer, the calibration recorder, and the visualizer.
     private struct ContactState {
-        let origin: CGPoint
-        let startTime: TimeInterval
-        let zone: MouseZone
-        var maxTravel: CGFloat
-        var maxSize: CGFloat
-        /// A physical click seen during the contact's life (irreversible).
-        var sawPhysicalClick: Bool
+        var contact: ContactAccumulator
         /// Set at `.began`: the click-count of the in-gap click run this contact
         /// *continues* (the count of a live WAIT_SECOND for its zone), or 0 if none.
         /// If it finalizes as a tap it emits `click(zone, followsCount + 1)` — 0→
@@ -111,28 +106,24 @@ public final class MouseGestureRecognizer {
                     touch.timestamp - $0.endTime <= config.doubleTapGap ? $0.count : 0
                 } ?? 0
                 contacts[key] = ContactState(
-                    origin: touch.position,
-                    startTime: touch.timestamp,
-                    zone: zone,
-                    maxTravel: 0,
-                    maxSize: touch.size,
-                    sawPhysicalClick: physicalClickActive,
+                    contact: ContactAccumulator(began: touch, zone: zone,
+                                                physicalClickActive: physicalClickActive),
                     followsCount: followsCount,
                     didBeginHold: false
                 )
             case .moved, .stationary:
                 guard var state = contacts[key] else { continue }
-                accumulate(&state, touch, physicalClickActive)
+                state.contact.accumulate(touch, physicalClickActive: physicalClickActive)
                 promoteToHoldIfNeeded(&state, now: touch.timestamp, singleContact: singleContact)
                 contacts[key] = state
             case .ended:
                 guard var state = contacts[key] else { continue }
-                accumulate(&state, touch, physicalClickActive)
+                state.contact.accumulate(touch, physicalClickActive: physicalClickActive)
                 contacts.removeValue(forKey: key)
                 if state.didBeginHold {
                     // A promoted drag: mirror the `holdBegan` with a `holdEnded` on
                     // lift so the pressed button is released (docs/03 §state machine).
-                    onGesture?(.holdEnded(zone: state.zone))
+                    onGesture?(.holdEnded(zone: state.contact.zone))
                 } else {
                     finalize(state, endTime: touch.timestamp)
                 }
@@ -147,22 +138,10 @@ public final class MouseGestureRecognizer {
     /// later `.ended` frame for the cancelled contact can't emit a stray release.
     public func cancelActiveHolds() {
         for state in contacts.values where state.didBeginHold {
-            onGesture?(.holdEnded(zone: state.zone))
+            onGesture?(.holdEnded(zone: state.contact.zone))
         }
         contacts.removeAll()
         pendingClick.removeAll()
-    }
-
-    private func accumulate(
-        _ state: inout ContactState,
-        _ touch: SurfaceTouch,
-        _ physicalClickActive: Bool
-    ) {
-        let dx = touch.position.x - state.origin.x
-        let dy = touch.position.y - state.origin.y
-        state.maxTravel = max(state.maxTravel, (dx * dx + dy * dy).squareRoot())
-        state.maxSize = max(state.maxSize, touch.size)
-        if physicalClickActive { state.sawPhysicalClick = true }
     }
 
     /// Promote a still-live contact to a drag once it has been held at least
@@ -186,7 +165,7 @@ public final class MouseGestureRecognizer {
         _ state: inout ContactState, now: TimeInterval, singleContact: Bool
     ) {
         guard !state.didBeginHold else { return }
-        guard now - state.startTime >= config.holdThreshold else { return }
+        guard now - state.contact.startTime >= config.holdThreshold else { return }
         // A hardware click during this contact's life disqualifies the **hold**, exactly as
         // it disqualifies a tap (`isTap`): the user is driving the button themselves, so
         // synthesizing a drag on top would duplicate the OS's own click — and, with
@@ -196,7 +175,7 @@ public final class MouseGestureRecognizer {
         // promoted, and click 2 was swallowed as a "mid-drag squeeze" (docs/14 §Click/drag
         // de-confliction, finding #2 / scenario #9). Checked here rather than at `.began`
         // because the flag is set irreversibly mid-contact.
-        if config.requireNoPhysicalClick, state.sawPhysicalClick { return }
+        if config.requireNoPhysicalClick, state.contact.sawPhysicalClick { return }
         switch config.dragStyle {
         case .tapAndAHalf:
             // Only the immediate second contact hold-promotes; a later tap in a
@@ -204,10 +183,10 @@ public final class MouseGestureRecognizer {
             // drag is a separate roadmap feature).
             guard state.followsCount == 1 else { return }
         case .pressAndHold:
-            guard singleContact, state.maxTravel <= config.maxTravel else { return }
+            guard singleContact, state.contact.maxTravel <= config.maxTravel else { return }
         }
         state.didBeginHold = true
-        onGesture?(.holdBegan(zone: state.zone))
+        onGesture?(.holdBegan(zone: state.contact.zone))
     }
 
     private func finalize(_ state: ContactState, endTime: TimeInterval) {
@@ -219,28 +198,27 @@ public final class MouseGestureRecognizer {
         // window — where we never observed the contact held, so we emit nothing and
         // the run so far stands (safer than synthesizing a press/release that never
         // dragged, or upgrading the click count on a contact that was really held).
-        if state.followsCount >= 1, endTime - state.startTime >= config.holdThreshold { return }
+        if state.followsCount >= 1,
+           endTime - state.contact.startTime >= config.holdThreshold { return }
         // A non-tap contact fizzles. If it was continuing a run, that run's pending
         // was already consumed at `.began`, so the clicks emitted so far simply stand.
         guard isTap(state, endTime: endTime) else { return }
         // Continue the run: 0→single, 1→double, 2→triple. `clickState = count`
         // downstream makes the OS see a genuine N-click (e.g. triple → line select).
         let count = state.followsCount + 1
-        onGesture?(.click(zone: state.zone, count: count))
+        onGesture?(.click(zone: state.contact.zone, count: count))
         // Arm the next step unless we've hit the cap (a triple does not arm a
         // quadruple), so a further in-gap tap continues to `count + 1`.
         if count < config.maxClickCount {
-            pendingClick[state.zone] = PendingClick(endTime: endTime, count: count)
+            pendingClick[state.contact.zone] = PendingClick(endTime: endTime, count: count)
         }
     }
 
     /// The tap primitive (docs/03 §What counts as a tap): short enough, still
-    /// enough, small enough, and no hardware click during its life.
+    /// enough, small enough, and no hardware click during its life. The gates
+    /// themselves live in `ContactAccumulator` so the visualizer's live readout and
+    /// a logged sample evaluate the identical rules.
     private func isTap(_ state: ContactState, endTime: TimeInterval) -> Bool {
-        if config.requireNoPhysicalClick && state.sawPhysicalClick { return false }
-        if endTime - state.startTime > config.maxDuration { return false }
-        if state.maxTravel > config.maxTravel { return false }
-        if state.maxSize > config.maxSize { return false }
-        return true
+        state.contact.verdict(at: endTime, against: config) == .tap
     }
 }

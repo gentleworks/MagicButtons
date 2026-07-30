@@ -1,0 +1,85 @@
+import Foundation
+import CoreGraphics
+import TouchKit
+
+/// Why a contact would (or would not) be accepted as a tap. Lives here rather than
+/// with the metrics recorder because it is now shared vocabulary: the recognizer's
+/// decision, a logged sample, and the visualizer's live readout all come from the
+/// one evaluation below.
+public enum TapVerdict: String, Sendable, Equatable, Codable, CaseIterable {
+    case tap
+    case rejectedPhysicalClick
+    case rejectedDuration
+    case rejectedTravel
+    case rejectedSize
+}
+
+/// The per-contact measurements the tap rules are judged on, accumulated over a
+/// contact's life. **One implementation, deliberately shared**: `MouseGestureRecognizer`
+/// (which decides) and `ContactMetricsRecorder` (which measures) each kept a parallel
+/// copy of this arithmetic, and feeding the visualizer would have made a third — so
+/// this exists to keep what is *drawn* the same as what *decides* (docs/10 §Visualizer).
+///
+/// Zone is captured once, at `.began`, so drift toward a boundary never reassigns the
+/// button. Travel is Euclidean in **normalized** space, which the sensor's portrait
+/// aspect makes anisotropic in physical terms (docs/04) — the visualizer draws it at
+/// that true shape so the choice is auditable rather than implicit.
+public struct ContactAccumulator: Sendable, Equatable {
+    public let origin: CGPoint
+    public let startTime: TimeInterval
+    public let zone: MouseZone
+
+    public private(set) var last: CGPoint
+    /// Timestamp of the newest frame seen. The recognizer is deliberately clock-free,
+    /// so "now" is always this — never a wall clock.
+    public private(set) var lastTime: TimeInterval
+    public private(set) var maxTravel: CGFloat = 0
+    public private(set) var maxSize: CGFloat
+    public private(set) var sawPhysicalClick: Bool
+    public private(set) var frameCount = 1
+
+    public init(began touch: SurfaceTouch, zone: MouseZone, physicalClickActive: Bool) {
+        self.origin = touch.position
+        self.startTime = touch.timestamp
+        self.zone = zone
+        self.last = touch.position
+        self.lastTime = touch.timestamp
+        self.maxSize = touch.size
+        self.sawPhysicalClick = physicalClickActive
+    }
+
+    public mutating func accumulate(_ touch: SurfaceTouch, physicalClickActive: Bool) {
+        let dx = touch.position.x - origin.x
+        let dy = touch.position.y - origin.y
+        maxTravel = max(maxTravel, (dx * dx + dy * dy).squareRoot())
+        maxSize = max(maxSize, touch.size)
+        if physicalClickActive { sawPhysicalClick = true }
+        last = touch.position
+        lastTime = touch.timestamp
+        frameCount += 1
+    }
+
+    /// Elapsed as of the last observed frame.
+    public var duration: TimeInterval { lastTime - startTime }
+
+    /// This contact's verdict as of `endTime`.
+    public func verdict(at endTime: TimeInterval, against config: GestureConfig) -> TapVerdict {
+        Self.verdict(duration: endTime - startTime, maxTravel: maxTravel, maxSize: maxSize,
+                     sawPhysicalClick: sawPhysicalClick, config: config)
+    }
+
+    /// The single place the tap gates are evaluated, in the tap primitive's order
+    /// (docs/03 §What counts as a tap): physical click → duration → travel → size.
+    /// `MouseGestureRecognizer.isTap` and `ContactSample.verdict(against:)` both route
+    /// here, so a live readout and the real decision cannot drift apart.
+    public static func verdict(
+        duration: TimeInterval, maxTravel: CGFloat, maxSize: CGFloat,
+        sawPhysicalClick: Bool, config: GestureConfig
+    ) -> TapVerdict {
+        if config.requireNoPhysicalClick && sawPhysicalClick { return .rejectedPhysicalClick }
+        if duration > config.maxDuration { return .rejectedDuration }
+        if maxTravel > config.maxTravel { return .rejectedTravel }
+        if maxSize > config.maxSize { return .rejectedSize }
+        return .tap
+    }
+}

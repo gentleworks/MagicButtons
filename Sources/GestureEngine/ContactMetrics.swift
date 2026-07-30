@@ -13,24 +13,12 @@ import TouchKit
 // distribution of those samples is what the Phase 9 tuning pass reads to set the
 // shipped defaults (and to decide the optional `y` rejection band, docs/08 §A).
 //
-// This is a *diagnostic* type, deliberately parallel to `MouseGestureRecognizer`
-// rather than part of it: it mirrors the recognizer's contact accounting exactly
-// (began-time zone capture, Euclidean max-travel, max-size, physical-click latch)
-// so the logged numbers are the same ones the recognizer judges — but it never
-// filters, so nothing is lost to the current thresholds. Pure logic: no hardware,
-// no I/O, fully testable with scripted frames.
-
-/// Why a contact would (or would not) be accepted as a tap, evaluated against a
-/// given `GestureConfig`. The rejection cases mirror the gate order in
-/// `MouseGestureRecognizer.isTap`, so a sample's verdict answers *which* threshold
-/// a real tap tripped on — the signal that tells you which default to loosen.
-public enum TapVerdict: String, Sendable, Equatable, Codable, CaseIterable {
-    case tap
-    case rejectedPhysicalClick
-    case rejectedDuration
-    case rejectedTravel
-    case rejectedSize
-}
+// This is a *diagnostic* type that sits beside `MouseGestureRecognizer` rather than
+// inside it. It no longer *mirrors* the recognizer's contact accounting — both now
+// accumulate through the shared `ContactAccumulator`, so the logged numbers are by
+// construction the ones the recognizer judges — but it never filters, so nothing is
+// lost to the current thresholds. Pure logic: no hardware, no I/O, fully testable
+// with scripted frames.
 
 /// The raw measurements of one completed finger contact — the tuning record. All
 /// fields are captured over the contact's full life (`.began`→`.ended`), matching
@@ -95,11 +83,9 @@ public struct ContactSample: Sendable, Equatable, Codable {
     /// just how many real taps are rejected, but by which gate. Gate order matches
     /// the recognizer (physical-click → duration → travel → size).
     public func verdict(against config: GestureConfig) -> TapVerdict {
-        if config.requireNoPhysicalClick && sawPhysicalClick { return .rejectedPhysicalClick }
-        if duration > config.maxDuration { return .rejectedDuration }
-        if maxTravel > config.maxTravel { return .rejectedTravel }
-        if maxSize > config.maxSize { return .rejectedSize }
-        return .tap
+        ContactAccumulator.verdict(
+            duration: duration, maxTravel: maxTravel, maxSize: maxSize,
+            sawPhysicalClick: sawPhysicalClick, config: config)
     }
 }
 
@@ -146,23 +132,12 @@ public final class ContactMetricsRecorder {
 
     private let layout: ZoneLayout
 
-    private struct Live {
-        let origin: CGPoint
-        let startTime: TimeInterval
-        let zone: MouseZone
-        var last: CGPoint
-        var maxTravel: CGFloat
-        var maxSize: CGFloat
-        var sawPhysicalClick: Bool
-        var frameCount: Int
-    }
-
     private struct Key: Hashable {
         let device: UInt64
         let id: Int32
     }
 
-    private var live: [Key: Live] = [:]
+    private var live: [Key: ContactAccumulator] = [:]
 
     public init(layout: ZoneLayout) {
         self.layout = layout
@@ -175,22 +150,16 @@ public final class ContactMetricsRecorder {
             let key = Key(device: touch.deviceID.raw, id: touch.id)
             switch touch.phase {
             case .began:
-                live[key] = Live(
-                    origin: touch.position,
-                    startTime: touch.timestamp,
-                    zone: layout.zone(for: touch.position),
-                    last: touch.position,
-                    maxTravel: 0,
-                    maxSize: touch.size,
-                    sawPhysicalClick: physicalClickActive,
-                    frameCount: 1)
+                live[key] = ContactAccumulator(
+                    began: touch, zone: layout.zone(for: touch.position),
+                    physicalClickActive: physicalClickActive)
             case .moved, .stationary:
                 guard var s = live[key] else { continue }
-                accumulate(&s, touch, physicalClickActive)
+                s.accumulate(touch, physicalClickActive: physicalClickActive)
                 live[key] = s
             case .ended:
                 guard var s = live[key] else { continue }
-                accumulate(&s, touch, physicalClickActive)
+                s.accumulate(touch, physicalClickActive: physicalClickActive)
                 live.removeValue(forKey: key)
                 onSample?(ContactSample(
                     deviceID: touch.deviceID.raw,
@@ -212,16 +181,6 @@ public final class ContactMetricsRecorder {
     /// frame — device loss, disable — has no meaningful duration, so it is not a
     /// sample). Matches the recognizer dropping its state on cancel.
     public func reset() { live.removeAll() }
-
-    private func accumulate(_ s: inout Live, _ touch: SurfaceTouch, _ physicalClickActive: Bool) {
-        let dx = touch.position.x - s.origin.x
-        let dy = touch.position.y - s.origin.y
-        s.maxTravel = max(s.maxTravel, (dx * dx + dy * dy).squareRoot())
-        s.maxSize = max(s.maxSize, touch.size)
-        if physicalClickActive { s.sawPhysicalClick = true }
-        s.last = touch.position
-        s.frameCount += 1
-    }
 }
 
 // MARK: - Summary
