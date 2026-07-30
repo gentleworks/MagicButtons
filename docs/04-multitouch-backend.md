@@ -149,8 +149,13 @@ keeping ordering and keeping the framework's thread free. UI marshaling to
 ### Per-OS layout verification table (Phase 9)
 
 The 96-byte community `MTTouch` layout, confirmed to yield sane coordinates
-(normalized position in `0…1`, `majorAxis` ≈ 8–10 per finger — [[touch-size-scale]])
-via `dump-frames` on real hardware. Add a row whenever the app is verified on a new
+(normalized position in `0…1`, `majorAxis` ≈ 8–10 per finger) via `dump-frames` on
+real hardware. **Verified further 2026-07-30:** `minorAxis` ≤ `majorAxis` always;
+`angle` is quantized to π/64 steps and lands exactly on π/2, which pins the offsets
+through `angle`/`majorAxis`/`minorAxis`; `zTotal` steps in 1/8. The axes are in
+**millimetres** — `MTDeviceGetSensorSurfaceDimensions` returns ¹⁄₁₀₀ mm, so the
+Magic Mouse surface is 51.52 × 90.56 mm and a fingertip patch is ~9–12 mm.
+On raw state 7 the axes and `zTotal` zero out while `angle` holds its last value. Add a row whenever the app is verified on a new
 macOS. A build whose `sizeof(MTTouch)` or coordinate sanity departs from a listed
 row means the layout must be re-derived for that OS before trusting frames.
 

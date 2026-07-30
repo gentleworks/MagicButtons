@@ -34,14 +34,27 @@ public enum MultitouchDump {
         for (index, device) in devices.enumerated() {
             let dims = backend.surfaceSize(of: device)
             let id = backend.stableID(of: device)
-            let dimStr = dims.map { "\($0.width)×\($0.height) (¹⁄₁₀₀ mm)" } ?? "unknown"
+            // Also in mm: the raw ¹⁄₁₀₀ mm figures are what the contact axes have to be
+            // interpreted against, and `majorAxis` ≈ 8–10 is only meaningful next to a
+            // surface of known physical size (a ~9 mm fingertip patch on a 51.5 mm-wide
+            // shell is ~18% of its width — the check that says whether the axes are mm).
+            let dimStr = dims.map {
+                let mm = { (v: Int32) in String(format: "%.1f", Double(v) / 100) }
+                return "\($0.width)×\($0.height) (¹⁄₁₀₀ mm) = \(mm($0.width))×\(mm($0.height)) mm"
+            } ?? "unknown"
             print("  [\(index)] id=0x\(String(id, radix: 16)) surface=\(dimStr)")
             state.label[device] = index
         }
 
         print("""
         \nstreaming raw contacts for \(Int(seconds))s — touch/tap/lift on the mouse.
-        columns: dev  frame  id  state  x      y      major  ts
+        columns: dev  frame  id  state  x      y      major  minor  angle  z      ts
+
+        `major`/`minor` are the fitted contact ellipse's axes and `angle` its
+        orientation; only `x`/`y`/`major` are layout-verified (docs/04 §per-OS table),
+        so sanity-check the new three: minor ≤ major always, angle in a stable range,
+        z rising as you press. `x`/`y` are the patch CENTROID — watch whether they
+        drift while the axes grow, which is finger roll, not finger travel.
         """)
 
         activeDump = state
@@ -113,10 +126,10 @@ private let dumpFrameCallback: MTContactFrameCallback = { device, touches, numTo
         guard dump.printed < dump.maxLines else { continue }
         dump.printed += 1
         let line = String(
-            format: "%3d %6d %3d %5d  %.3f  %.3f  %.3f  %.3f",
+            format: "%3d %6d %3d %5d  %.3f  %.3f  %.3f  %.3f  %.3f  %.3f  %.3f",
             dev, t.frame, t.identifier, t.state,
             t.normalized.position.x, t.normalized.position.y,
-            t.majorAxis, timestamp)
+            t.majorAxis, t.minorAxis, t.angle, t.zTotal, timestamp)
         print(line)
     }
     return 0

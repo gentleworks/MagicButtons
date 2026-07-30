@@ -108,8 +108,10 @@ left/middle/right areas and confirm the zones read correctly.
 *You should see:* one `began` and one `ended` line per tap, with sensible zones.
 
 **`dump-frames [seconds]`** — Lower-level than `verify-source`: dumps the *raw*
-hardware contact fields (plus the detected surface dimensions). This is for
-bring-up on a new machine or OS, to confirm the private data layout still matches.
+hardware contact fields — position, the contact ellipse's major/minor axes and
+angle, and `z` — plus the detected surface dimensions in both ¹⁄₁₀₀ mm and mm. This
+is for bring-up on a new machine or OS, to confirm the private data layout still
+matches, and for reading what the contact patch is actually doing during a tap.
 You normally won't need it.
 
 **`visualize [sim]`** — Opens a live window drawing finger dots over the three
