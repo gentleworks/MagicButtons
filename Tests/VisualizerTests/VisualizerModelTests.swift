@@ -105,3 +105,55 @@ import TouchKit
         #expect(model.lastFlash == nil)
     }
 }
+
+@MainActor
+@Suite struct VisualizerBudgetTests {
+    private func budget(
+        id: Int32 = 1, travel: CGFloat = 0.01,
+        verdict: VisualizerModel.ContactBudget.Verdict = .wouldTap
+    ) -> VisualizerModel.ContactBudget {
+        VisualizerModel.ContactBudget(id: id, origin: CGPoint(x: 0.5, y: 0.5),
+                                      travel: travel, budget: 0.06, verdict: verdict)
+    }
+
+    private func touch(_ x: CGFloat) -> SurfaceTouch {
+        SurfaceTouch(deviceID: MouseDeviceID(raw: 1), id: 1,
+                     position: CGPoint(x: x, y: 0.5), phase: .moved, timestamp: 0, size: 9)
+    }
+
+    @Test func startsWithNoBudgets() {
+        #expect(VisualizerModel().budgets.isEmpty)
+    }
+
+    /// The harness and previews drive the picture with no recognizer behind them, so
+    /// the budget argument defaults away rather than forcing every caller to have one.
+    @Test func updateWithoutBudgetsLeavesThemEmpty() {
+        let model = VisualizerModel()
+        model.update([touch(0.5)])
+        #expect(model.touches.count == 1)
+        #expect(model.budgets.isEmpty)
+    }
+
+    @Test func updatePublishesBudgets() {
+        let model = VisualizerModel()
+        model.update([touch(0.5)], budgets: [budget(travel: 0.03)])
+        #expect(model.budgets.count == 1)
+        #expect(model.budgets.first?.travel == 0.03)
+        #expect(model.budgets.first?.verdict == .wouldTap)
+    }
+
+    /// Budgets belong to the frame they arrived with — a later frame with none must
+    /// clear them, or a ring would outlive the contact that owned it.
+    @Test func aFrameWithoutBudgetsClearsThePreviousOnes() {
+        let model = VisualizerModel()
+        model.update([touch(0.5)], budgets: [budget()])
+        model.update([])
+        #expect(model.budgets.isEmpty)
+    }
+
+    @Test func carriesTheVerdictThatTripped() {
+        let model = VisualizerModel()
+        model.update([touch(0.5)], budgets: [budget(travel: 0.09, verdict: .rejectedTravel)])
+        #expect(model.budgets.first?.verdict == .rejectedTravel)
+    }
+}

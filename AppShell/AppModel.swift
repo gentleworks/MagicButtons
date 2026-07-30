@@ -225,7 +225,14 @@ final class AppModel {
         // attach/detach (delivered on the main run loop).
         coordinator.onFrame = { [weak self] frame in
             guard let self else { return }
-            self.visualizer.update(frame)
+            // Read after `ingest` — the coordinator's tee fires there — so these are this
+            // frame's measurements, taken from the recognizer that judges them. Mapped to
+            // the visualizer's own vocabulary so that package stays free of GestureEngine.
+            self.visualizer.update(frame, budgets: self.coordinator.liveContacts.map {
+                VisualizerModel.ContactBudget(
+                    id: $0.id, origin: $0.origin, travel: $0.maxTravel,
+                    budget: $0.travelBudget, verdict: Self.budgetVerdict($0.verdictSoFar))
+            })
             self.streamHealth.noteFrame(at: ProcessInfo.processInfo.systemUptime)
             // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one
             // check per frame — the other two streams aren't even installed.
@@ -604,6 +611,21 @@ final class AppModel {
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()
+    }
+
+    /// `TapVerdict` → the visualizer's mirror of it. The translation exists because
+    /// `Visualizer` depends on `TouchKit` alone and never on `GestureEngine` (docs/06);
+    /// this is the same boundary `ButtonGesture` → `RecognizedGesture` pays for above.
+    private static func budgetVerdict(
+        _ verdict: TapVerdict
+    ) -> VisualizerModel.ContactBudget.Verdict {
+        switch verdict {
+        case .tap:                   return .wouldTap
+        case .rejectedPhysicalClick: return .rejectedPhysicalClick
+        case .rejectedDuration:      return .rejectedDuration
+        case .rejectedTravel:        return .rejectedTravel
+        case .rejectedSize:          return .rejectedSize
+        }
     }
 
     // MARK: Actions

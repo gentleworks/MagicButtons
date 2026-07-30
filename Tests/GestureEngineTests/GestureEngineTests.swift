@@ -512,3 +512,113 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
         #expect(out.contains(.holdBegan(zone: .left)))
     }
 }
+
+// MARK: - Live contacts (the visualizer's feed, docs/10 §Visualizer)
+
+private let deviceB = MouseDeviceID(raw: 2)
+
+/// Ingest frames and hand back the recognizer itself, so its *in-flight* state can be
+/// read — `run` above discards it, which is exactly what these tests need to keep.
+private func recognizerAfter(
+    _ frames: [Frame], config: GestureConfig = GestureConfig()
+) -> MouseGestureRecognizer {
+    let recognizer = MouseGestureRecognizer(layout: ZoneLayout(), config: config)
+    for frame in frames {
+        recognizer.ingest(frame.touches, physicalClickActive: frame.physicalClickActive)
+    }
+    return recognizer
+}
+
+/// One contact that begins at `origin` and is still down at `end` — no `.ended`, so
+/// the recognizer is still tracking it when the test reads `liveContacts`.
+private func stillDown(
+    from origin: CGPoint, to end: CGPoint,
+    t0: TimeInterval = 0, elapsed: TimeInterval = 0.05, size: CGFloat = 0.3
+) -> [Frame] {
+    [
+        Frame(touches: [SurfaceTouch(deviceID: device, id: 1, position: origin,
+                                     phase: .began, timestamp: t0, size: size)],
+              physicalClickActive: false),
+        Frame(touches: [SurfaceTouch(deviceID: device, id: 1, position: end,
+                                     phase: .moved, timestamp: t0 + elapsed, size: size)],
+              physicalClickActive: false),
+    ]
+}
+
+@Suite struct LiveContactTests {
+    @Test func reportsTheOriginTravelIsMeasuredFrom() throws {
+        let r = recognizerAfter(stillDown(from: CGPoint(x: 0.5, y: 0.5),
+                                          to: CGPoint(x: 0.53, y: 0.54)))
+        let live = try #require(r.liveContacts.first)
+        #expect(live.origin == CGPoint(x: 0.5, y: 0.5))
+        #expect(abs(live.maxTravel - 0.05) < 1e-9)   // 3-4-5
+    }
+
+    /// The budget is spent by the *furthest* excursion, not the current offset — a
+    /// finger that wanders and comes back has still used it up, and the ring must
+    /// show that rather than snapping shut.
+    @Test func maxTravelKeepsTheFurthestPointNotTheLatest() throws {
+        var frames = stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+        frames.append(Frame(
+            touches: [SurfaceTouch(deviceID: device, id: 1, position: CGPoint(x: 0.5, y: 0.5),
+                                   phase: .moved, timestamp: 0.1, size: 0.3)],
+            physicalClickActive: false))
+        let live = try #require(recognizerAfter(frames).liveContacts.first)
+        #expect(abs(live.maxTravel - 0.05) < 1e-9)
+    }
+
+    @Test func clearWhenTheContactEnds() {
+        #expect(recognizerAfter(tap(at: CGPoint(x: 0.5, y: 0.5))).liveContacts.isEmpty)
+    }
+
+    @Test func verdictIsTapWhileTheContactIsStillViable() throws {
+        let live = try #require(recognizerAfter(
+            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.52, y: 0.52))
+        ).liveContacts.first)
+        #expect(live.verdictSoFar == .tap)
+    }
+
+    @Test func verdictNamesTheTravelGateOnceTravelExceedsTheBudget() throws {
+        let live = try #require(recognizerAfter(
+            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.56, y: 0.58))
+        ).liveContacts.first)   // travel 0.10 > maxTravel 0.06
+        #expect(live.verdictSoFar == .rejectedTravel)
+    }
+
+    /// Evaluated at the newest frame's timestamp, so the tap window closing is visible
+    /// live — and without giving the recognizer a clock.
+    @Test func verdictNamesTheDurationGateOnceTheTapWindowCloses() throws {
+        let p = CGPoint(x: 0.5, y: 0.5)
+        let live = try #require(recognizerAfter(
+            stillDown(from: p, to: p, elapsed: 0.25)
+        ).liveContacts.first)   // 0.25 > maxDuration 0.18, and travel is 0
+        #expect(live.verdictSoFar == .rejectedDuration)
+    }
+
+    /// The drawn ring must never show a stale threshold, so the budget rides along
+    /// from the recognizer's own config rather than being read separately by the view.
+    @Test func travelBudgetComesFromTheRecognizersOwnConfig() throws {
+        var config = GestureConfig()
+        config.maxTravel = 0.02
+        let live = try #require(recognizerAfter(
+            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.51, y: 0.5)),
+            config: config
+        ).liveContacts.first)
+        #expect(live.travelBudget == 0.02)
+    }
+
+    @Test func areOrderedByDeviceThenID() {
+        let r = MouseGestureRecognizer(layout: ZoneLayout(), config: GestureConfig())
+        let p = CGPoint(x: 0.5, y: 0.5)
+        r.ingest([
+            SurfaceTouch(deviceID: deviceB, id: 1, position: p, phase: .began,
+                         timestamp: 0, size: 0.3),
+            SurfaceTouch(deviceID: device, id: 7, position: p, phase: .began,
+                         timestamp: 0, size: 0.3),
+            SurfaceTouch(deviceID: device, id: 2, position: p, phase: .began,
+                         timestamp: 0, size: 0.3),
+        ], physicalClickActive: false)
+        #expect(r.liveContacts.map(\.id) == [2, 7, 1])
+        #expect(r.liveContacts.map(\.deviceID.raw) == [1, 1, 2])
+    }
+}

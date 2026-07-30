@@ -54,7 +54,12 @@ public struct VisualizerView: View {
                 zoneBands(in: size).clipShape(outline)
                 boundaryLines(in: size).clipShape(outline)
                 outline.strokeBorder(Color.primary.opacity(0.35), lineWidth: 1.5)
+                // Rings *over* the contact, not under. The budget is 6.2 x 10.9 mm and a
+                // fingertip patch is ~11 x 8 mm — they are nearly the same size, so the
+                // two always overlap and the annotation has to sit on top or it is buried
+                // in exactly the cases worth reading.
                 touchDots(in: size)
+                budgetRings(in: size).clipShape(outline)
             }
             .overlay(alignment: .top) { flashBadge }
         }
@@ -140,6 +145,39 @@ public struct VisualizerView: View {
         .stroke(Color.primary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
     }
 
+    // MARK: Travel budget
+
+    /// The tap-travel budget around each contact's origin: how far this finger may drift
+    /// before it stops being a tap. The gate is Euclidean in **normalized** space, and
+    /// the surface is aspect-true, so it draws as a portrait ellipse ~1.76:1 — that shape
+    /// *is* the gate's real anisotropy, not a drawing artifact (docs/10 §Visualizer).
+    private func budgetRings(in size: CGSize) -> some View {
+        ForEach(model.budgets) { b in
+            let tripped = b.verdict == .rejectedTravel
+            ZStack {
+                // Travel reached so far: the locus of points at this contact's furthest
+                // distance from its origin. A measured distance, drawn to scale.
+                Ellipse()
+                    // `.primary`, not the accent: the contact underneath is accent-filled,
+                    // so an accent ring on top of it disappears into its own colour.
+                    .stroke(Color.primary.opacity(0.85), lineWidth: 1)
+                    .frame(width: b.travel * size.width * 2,
+                           height: b.travel * size.height * 2)
+                // The budget itself. Solid once travel has exceeded it, dashed while
+                // there is headroom — so the state is not carried by colour alone.
+                Ellipse()
+                    .stroke(tripped ? Color.red : Color.primary.opacity(0.55),
+                            style: tripped ? StrokeStyle(lineWidth: 2)
+                                           : StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .frame(width: b.budget * size.width * 2,
+                           height: b.budget * size.height * 2)
+                // The origin, so the ring's anchor stays visible once the finger drifts.
+                Circle().fill(Color.primary.opacity(0.5)).frame(width: 4, height: 4)
+            }
+            .position(point(for: b.origin, in: size))
+        }
+    }
+
     // MARK: Contacts
 
     private func touchDots(in size: CGSize) -> some View {
@@ -168,8 +206,14 @@ public struct VisualizerView: View {
 
     /// Flip `y` once, here at the drawing boundary (docs/06).
     private func point(for t: SurfaceTouch, in size: CGSize) -> CGPoint {
-        CGPoint(x: t.position.x * size.width,
-                y: (1 - t.position.y) * size.height)
+        point(for: t.position, in: size)
+    }
+
+    /// The same single flip for any normalized point — a contact's origin as much as
+    /// its current position, so both go through one place.
+    private func point(for normalized: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: normalized.x * size.width,
+                y: (1 - normalized.y) * size.height)
     }
 
     /// A frame that predates the minor axis — an old recording, or a synthetic source —

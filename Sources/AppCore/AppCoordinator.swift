@@ -86,6 +86,10 @@ public final class AppCoordinator {
     /// re-enumeration, which lifts every hold (docs/05) and so must not run mid-drag.
     public var hasActiveHolds: Bool { pipeline.hasActiveHolds }
 
+    /// The recognizer's in-flight contacts, for the visualizer's travel budget. Read
+    /// inside `onFrame`, which fires after the pipeline has ingested this frame.
+    public var liveContacts: [LiveContact] { pipeline.liveContacts }
+
     /// The Magic Mouse secondary-click side currently honored by the emitter (read from
     /// the system by the App and pushed in via `setSecondaryClickSide`). Observable so
     /// the Status panel can show which arrangement is active.

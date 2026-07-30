@@ -13,6 +13,43 @@ import TouchKit
 /// `doubleTapGap` continues the run — `click(zone, 2)`, `click(zone, 3)` — or, as the
 /// *second* contact, is held past `holdThreshold` → `holdBegan(zone)` then
 /// `holdEnded(zone)` on lift (Phase 8, docs/03 §The unified state machine).
+/// A read-only snapshot of one contact the recognizer is currently tracking — what it
+/// has measured *so far* and how it would be judged if it ended now. This is the feed
+/// the visualizer draws its tap-travel budget from, so the picture comes from the
+/// machinery that decides rather than a parallel copy of it (docs/10 §Visualizer).
+public struct LiveContact: Sendable, Equatable, Identifiable {
+    public let id: Int32
+    public let deviceID: MouseDeviceID
+    /// The `.began` position travel is measured from, normalized, origin bottom-left.
+    public let origin: CGPoint
+    public let zone: MouseZone
+    /// Greatest Euclidean distance from `origin` reached so far, in normalized space.
+    public let maxTravel: CGFloat
+    /// The `maxTravel` this contact will actually be judged against — carried from the
+    /// recognizer's own live config so a drawn ring cannot show a stale threshold.
+    public let travelBudget: CGFloat
+    /// Why this contact would be rejected **if it ended at the last frame seen**, or
+    /// `.tap`. Evaluated at that frame's timestamp, never a wall clock, so reading it
+    /// does not put a clock into the recognizer.
+    public let verdictSoFar: TapVerdict
+    public let didBeginHold: Bool
+
+    public init(
+        id: Int32, deviceID: MouseDeviceID, origin: CGPoint, zone: MouseZone,
+        maxTravel: CGFloat, travelBudget: CGFloat, verdictSoFar: TapVerdict,
+        didBeginHold: Bool
+    ) {
+        self.id = id
+        self.deviceID = deviceID
+        self.origin = origin
+        self.zone = zone
+        self.maxTravel = maxTravel
+        self.travelBudget = travelBudget
+        self.verdictSoFar = verdictSoFar
+        self.didBeginHold = didBeginHold
+    }
+}
+
 public final class MouseGestureRecognizer {
     /// Emitted on the calling thread as gestures are recognized.
     public var onGesture: ((ButtonGesture) -> Void)?
@@ -129,6 +166,24 @@ public final class MouseGestureRecognizer {
                 }
             }
         }
+    }
+
+    /// Every contact currently tracked, ordered by `(device, id)` so a consumer sees a
+    /// stable sequence frame to frame. Read *after* `ingest` to see the current frame.
+    public var liveContacts: [LiveContact] {
+        contacts.map { key, state in
+            LiveContact(
+                id: key.id,
+                deviceID: MouseDeviceID(raw: key.device),
+                origin: state.contact.origin,
+                zone: state.contact.zone,
+                maxTravel: state.contact.maxTravel,
+                travelBudget: config.maxTravel,
+                verdictSoFar: state.contact.verdict(at: state.contact.lastTime,
+                                                    against: config),
+                didBeginHold: state.didBeginHold)
+        }
+        .sorted { ($0.deviceID.raw, $0.id) < ($1.deviceID.raw, $1.id) }
     }
 
     /// Safety hook: the coordinator calls this when a feature is disabled or the

@@ -22,6 +22,39 @@ public final class VisualizerModel {
     /// present. Drives the highlighted band (docs/06).
     public private(set) var activeZone: MouseZone?
 
+    /// One contact's tap-travel budget, in the visualizer's own TouchKit-only vocabulary
+    /// so the package stays decoupled from `GestureEngine` (docs/06). `AppShell` maps
+    /// `LiveContact` to this, exactly as it maps `ButtonGesture` to `RecognizedGesture`.
+    public struct ContactBudget: Sendable, Equatable, Identifiable {
+        /// Mirrors `GestureEngine.TapVerdict`. The cost of the package boundary.
+        public enum Verdict: Sendable, Equatable {
+            case wouldTap
+            case rejectedPhysicalClick, rejectedDuration, rejectedTravel, rejectedSize
+        }
+
+        public let id: Int32
+        /// Normalized, origin bottom-left — the point travel is measured from.
+        public let origin: CGPoint
+        /// Greatest distance from `origin` reached so far, normalized.
+        public let travel: CGFloat
+        /// The threshold `travel` is judged against, normalized.
+        public let budget: CGFloat
+        public let verdict: Verdict
+
+        public init(id: Int32, origin: CGPoint, travel: CGFloat,
+                    budget: CGFloat, verdict: Verdict) {
+            self.id = id
+            self.origin = origin
+            self.travel = travel
+            self.budget = budget
+            self.verdict = verdict
+        }
+    }
+
+    /// Travel budgets for the contacts the recognizer is tracking. Empty when nothing
+    /// is being tracked, or when the source has no recognizer behind it.
+    public private(set) var budgets: [ContactBudget] = []
+
     /// A recognized gesture, in the visualizer's own TouchKit-only vocabulary so the
     /// package stays decoupled from `GestureEngine` (docs/06: the visualizer never
     /// depends on the recognizer). The composition layer maps `ButtonGesture` to this.
@@ -71,8 +104,13 @@ public final class VisualizerModel {
     /// Push a frame. Call on the main actor. Picks the first live (non-`.ended`)
     /// contact as the "primary" for the active-zone readout; an all-`.ended` or
     /// empty frame means no finger, so the mapper resets and `activeZone` clears.
-    public func update(_ frame: [SurfaceTouch]) {
+    ///
+    /// `budgets` defaults empty so a source with no recognizer behind it — the
+    /// `mb-dev visualize` harness, SwiftUI previews — still drives the picture, just
+    /// without the travel rings.
+    public func update(_ frame: [SurfaceTouch], budgets: [ContactBudget] = []) {
         touches = frame
+        self.budgets = budgets
         if let primary = frame.first(where: { $0.phase != .ended }) {
             activeZone = mapper.update(x: primary.position.x)
         } else {

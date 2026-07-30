@@ -53,6 +53,10 @@ public final class GesturePipeline {
 
     public func setPhysicalClick(_ active: Bool) { physicalClickActive = active }
 
+    /// The recognizer's in-flight contacts (docs/06): read after `ingest` for this
+    /// frame's state. Read-only; a diagnostic view, never a routing input.
+    public var liveContacts: [LiveContact] { recognizer.liveContacts }
+
     public func ingest(_ touches: [SurfaceTouch]) {
         recognizer.ingest(touches, physicalClickActive: physicalClickActive)
     }
