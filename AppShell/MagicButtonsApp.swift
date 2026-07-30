@@ -34,6 +34,16 @@ private struct MenuBarLabel: View {
     let model: AppModel
 
     var body: some View {
+        glyph
+            // Sighted users read health off the glyph without opening the menu. VoiceOver
+            // users arrow through the menu-bar extras (VO+M twice, then arrows) and would
+            // otherwise hear only an image name, so the app name — plus the status when it
+            // needs attention — is spoken here, giving parity without opening the menu.
+            .accessibilityLabel(model.menuBarAccessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
         switch model.menuBarIcon {
         case .system(let name):
             Image(systemName: name)

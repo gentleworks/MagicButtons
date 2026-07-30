@@ -102,6 +102,12 @@ struct AdvancedSettingsView: View {
             // Guard against an inverted range while the paired edge is mid-drag.
             Slider(value: value, in: range.lowerBound <= range.upperBound
                    ? range : range.upperBound...range.upperBound)
+                // The title and readout above are siblings, not the Slider's own label, so
+                // without these VoiceOver announces seven anonymous sliders and Voice Control
+                // has no name to address. Reuses the existing copy: the same `title` key, and
+                // the same formatter as the visible readout — so it speaks "120 ms", not "0.12".
+                .accessibilityLabel(Text(title))
+                .accessibilityValue(format(value.wrappedValue))
         }
     }
 

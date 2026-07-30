@@ -780,6 +780,17 @@ final class AppModel {
             : String(localized: "Disabled", comment: "Menu status line: switched off by the user.")
     }
 
+    /// VoiceOver label for the menu-bar item. `statusSummary` alone announced a bare state
+    /// ("Active") with nothing to say *what* was active — menu-bar extras are identified by
+    /// app name first, and the icon is the only thing a VoiceOver user meets before opening
+    /// the menu. The status is appended only when it isn't the unremarkable case, so the
+    /// everyday reading stays short and anything needing attention still announces itself.
+    var menuBarAccessibilityLabel: String {
+        guard health != .operational else { return "MagicButtons" }
+        return String(localized: "MagicButtons — \(statusSummary)",
+                      comment: "VoiceOver label for the menu-bar icon when it needs attention; %@ is the status line. 'MagicButtons' is the app name — do not translate.")
+    }
+
     // MARK: Status-pane readouts (docs/09 §Status & Diagnostics)
 
     /// One-line device summary. v1 reports connected/active + touch flow; per-device

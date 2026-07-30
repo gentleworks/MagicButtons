@@ -45,6 +45,19 @@ public extension Permission {
         }
     }
 
+    /// Spoken state for the Status pane's grant indicator. The checkmark/cross carries the
+    /// state visually — distinct shapes, so it survives colour-blindness — but a bare SF
+    /// Symbol reaches VoiceOver as a symbol name at best, so the icon takes this as its
+    /// label instead. Not per-permission, hence `static`; it lives here because this is
+    /// where the rest of the permission copy is, and where it gets test coverage.
+    static func grantStateLabel(granted: Bool) -> String {
+        granted
+            ? String(localized: "Granted", bundle: #bundle,
+                     comment: "VoiceOver label for the Status pane icon of a granted permission.")
+            : String(localized: "Not granted", bundle: #bundle,
+                     comment: "VoiceOver label for the Status pane icon of a permission not yet granted.")
+    }
+
     /// Deep link straight to the exact System Settings pane (docs/07).
     var settingsURL: URL {
         let anchor: String

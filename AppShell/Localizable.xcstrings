@@ -502,6 +502,17 @@
         }
       }
     },
+    "MagicButtons — %@": {
+      "comment": "VoiceOver label for the menu-bar icon when it needs attention; %@ is the status line. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MagicButtons — %@"
+          }
+        }
+      }
+    },
     "Missing: %@": {
       "comment": "Menu status line listing permissions not yet granted.",
       "localizations": {

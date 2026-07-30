@@ -23,6 +23,28 @@
         }
       }
     },
+    "Granted" : {
+      "comment" : "VoiceOver label for the Status pane icon of a granted permission.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concedido"
+          }
+        }
+      }
+    },
+    "Not granted" : {
+      "comment" : "VoiceOver label for the Status pane icon of a permission not yet granted.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No concedido"
+          }
+        }
+      }
+    },
     "Post synthesized mouse-button clicks." : {
       "comment" : "Why the app needs Accessibility; shown under a granted permission.",
       "localizations" : {

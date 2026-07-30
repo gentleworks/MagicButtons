@@ -52,6 +52,45 @@ place without building them now.
   + device-scope hazards, two-tier safety story) lives in **`05-event-output.md`
   §Suppress physical clicks**. Its de-confliction prerequisite ships separately as
   **Feature B** — **`14-post-v1.md` §Click/drag de-confliction**, queued next.
+- **Visualizer: non-visual + threshold visibility** — split out of the accessibility pass
+  2026-07-30, which deliberately stopped at the UI's labels and left the visualizer's
+  *picture* alone. Three strands, in dependency order:
+  1. **Feed the visualizer from the interpreting machinery.** Per-contact accumulation
+     (`sqrt(dx²+dy²)` from the `.began` origin) is currently implemented **twice** —
+     `MouseGestureRecognizer.swift:163` and `ContactMetrics.swift:219`, the latter
+     "deliberately parallel" per its own header. **Decision: unify to one accumulator**
+     rather than add a third copy in the visualizer, so what's drawn is what decides.
+     `ContactMetrics` also needs live in-flight state exposed — today it only emits a
+     `ContactSample` per *completed* contact — and it is currently dev-only (`mb-dev`,
+     `Sources/App/main.swift:421`), so this puts it on the shipping per-frame path.
+     Keep `Visualizer` on `TouchKit` alone: it declares its own value type and
+     `AppShell/AppModel` translates, exactly as `ButtonGesture` →
+     `VisualizerModel.RecognizedGesture` already does at `AppModel.swift:237-245`.
+     Costs a mirror of `TapVerdict` on the visualizer side; that's the boundary's price.
+  2. **Draw the tap-travel budget** around the contact origin, so you can see how close a
+     tap came to being rejected as a drag, and *which* gate it tripped (`TapVerdict`
+     already answers that). **It is an ellipse, not a circle:** travel is Euclidean in
+     *normalized* space while the sensor is portrait ~9056/5152 ≈ 1.76:1, so the same
+     normalized travel is ~1.76× more physical distance vertically. Worth deciding
+     separately whether the **gate itself** should be aspect-corrected — that's a
+     recognizer change, and this visualization is what makes it auditable.
+     A separate "just landed" cue was considered and **dropped as redundant** with this
+     (and `holdBegan` already flashes its own badge).
+  3. **The visualizer for users who can't see it.** The code is modest (~40–60 lines:
+     the surface as one accessibility element with a live value, plus announcements) but
+     the *design* is the cost — continuous finger movement floods
+     `AccessibilityNotification.Announcement`, so it needs the "value actually changed AND
+     ≥0.3 s since the last" gate, and someone has to decide whether zone entry/exit is the
+     signal worth speaking. Needs VoiceOver-on iteration on hardware. The two-line badge
+     shipped in the accessibility pass gives this a head start: the zone is text now, not
+     only a tint.
+
+  Note phase is **not** a travel signal and never was: raw state 3 → `.began` fires for a
+  single frame (`PhaseMapping.swift`, pinned from bring-up as `3 → 4 … 4 → 5 → 6 → 7`),
+  state 4 → `.moved` means "touching, moving *or still*", and `.stationary` is never
+  emitted at all. So the green `.began` dot is invisible by construction, and any
+  landing/lifting cue must be a **timed hold** (the badge's 900 ms `flashClearTask` is the
+  idiom), not a colour.
 - **Per-app profiles** — different feature sets / zones per frontmost app. The
   policy layer is designed to accept a frontmost-app signal (via
   `NSWorkspace.didActivateApplication`); v1 wires nothing but keeps feature

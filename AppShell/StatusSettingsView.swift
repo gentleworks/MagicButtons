@@ -114,6 +114,7 @@ struct StatusSettingsView: View {
             HStack {
                 Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .foregroundStyle(granted ? Color.green : Color.red)
+                    .accessibilityLabel(Permission.grantStateLabel(granted: granted))
                 Text(permission.title)
                 Spacer()
                 if granted {

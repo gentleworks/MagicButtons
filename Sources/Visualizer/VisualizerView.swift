@@ -15,6 +15,10 @@ public struct VisualizerView: View {
     /// that aspect so dot positions read true.
     private let mouseAspect: CGFloat = 5152.0 / 9056.0
 
+    /// The gesture badge's scale-in is decorative — the badge appearing at all is the
+    /// signal — so it cross-fades instead for anyone who's asked for less motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init(model: VisualizerModel) {
         self.model = model
     }
@@ -45,7 +49,7 @@ public struct VisualizerView: View {
             .overlay(alignment: .top) { flashBadge }
         }
         .aspectRatio(mouseAspect, contentMode: .fit)
-        .animation(.easeOut(duration: 0.2), value: model.lastFlash?.id)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.lastFlash?.id)
     }
 
     /// A transient badge for the most recently recognized gesture (tap / double-tap),
@@ -54,15 +58,29 @@ public struct VisualizerView: View {
     @ViewBuilder
     private var flashBadge: some View {
         if let flash = model.lastFlash {
-            badgeLabel(flash.kind)
+            VStack(spacing: 0) {
+                badgeLabel(flash.kind)
+                // Which zone fired, in words. The capsule's tint was previously the only
+                // thing separating left/middle/right, and green-vs-orange is the commonest
+                // colour-blind confusion pair — precisely the middle/right distinction this
+                // app exists to draw. Reuses the caption's zone words, so no new strings.
+                Text(title(flash.zone)).font(.caption2)
+            }
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                // Dark on the vivid tint, not white: white measured 2.0:1 on green and
+                // 2.2:1 on orange, under the 3:1 floor for bold text. Deepening the fills
+                // instead fixed the ratio but turned orange brown and green muddy, so the
+                // palette stays as-is and the text carries the change (8.7 / 7.8 / 5.4:1).
+                // A fixed near-black, deliberately not `.primary` — that would flip to
+                // white in dark mode and put the bug straight back.
+                .foregroundStyle(Color(white: 0.10))
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(color(for: flash.zone)))
                 .padding(.top, 8)
                 .id(flash.id)
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -117,10 +135,16 @@ public struct VisualizerView: View {
     private func touchDots(in size: CGSize) -> some View {
         ForEach(model.touches, id: \.id) { t in
             let d = dotDiameter(for: t)
+            // The ring carries more weight than it did: a `.began` dot is green sitting on
+            // the green middle band, and the outline is the only thing separating the two.
+            // 1.5pt rather than 2 because `.primary` inverts — 2pt is right in dark mode but
+            // heavy-handed in light. A hollow dot for `.ended` was tried and reverted: it
+            // reads as *less* present, and `.ended` spans only raw states 5–7 (~3 frames), so
+            // no amount of restyling makes it legible — that needs a timed hold, not a style.
             Circle()
                 .fill(phaseColor(t.phase))
                 .frame(width: d, height: d)
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.5), lineWidth: 1))
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.75), lineWidth: 1.5))
                 .position(point(for: t, in: size))
         }
     }

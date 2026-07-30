@@ -14,6 +14,8 @@ struct AboutView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 96, height: 96)
+                // Decorative: the app name is spelled out in the Text directly below it.
+                .accessibilityHidden(true)
 
             Text(Self.appName)
                 .font(.title2.weight(.semibold))

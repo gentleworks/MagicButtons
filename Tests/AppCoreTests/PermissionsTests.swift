@@ -37,6 +37,16 @@ private final class FakeChecker: PermissionChecking {
         }
     }
 
+    @Test func grantStateLabelsAreDistinctAndPresent() {
+        // The Status pane's icon speaks these instead of an SF Symbol name, so an empty
+        // or shared string would leave the grant state unsaid.
+        let granted = Permission.grantStateLabel(granted: true)
+        let notGranted = Permission.grantStateLabel(granted: false)
+        #expect(!granted.isEmpty)
+        #expect(!notGranted.isEmpty)
+        #expect(granted != notGranted)
+    }
+
     @Test func accessibilityIsTheOnlyPermission() {
         // Input Monitoring was dropped in Phase 9 — it doesn't gate the multitouch
         // stream and its check false-positived (docs/08).
