@@ -29,13 +29,27 @@ public struct SurfaceTouch: Sendable, Identifiable, Equatable, Codable {
     /// Stable per-contact id, unique within `deviceID`; tracks a contact from
     /// `.began` to `.ended`.
     public let id: Int32
-    /// Normalized `0...1`, origin bottom-left.
+    /// Normalized `0...1`, origin bottom-left. This is the contact patch's
+    /// **centroid**, so it shifts when the patch grows asymmetrically — a finger
+    /// rolling onto its side registers as movement while the finger itself is
+    /// still (measured on hardware 2026-07-30: ~half the axis growth, and it
+    /// reverses as the patch shrinks).
     public let position: CGPoint
     public let phase: TouchPhase
     public let timestamp: TimeInterval
-    /// Contact area; used downstream to reject palm/noise (a *policy* decision,
-    /// so the adapter passes it through rather than judging it).
+    /// **Major axis** of the ellipse the hardware fits to the contact patch, in
+    /// millimetres (~9–12 for a fingertip). Not an area and not a pressure — it
+    /// grows as the patch elongates under press. Used downstream to reject
+    /// palm/noise (a *policy* decision, so the adapter passes it through rather
+    /// than judging it).
     public let size: CGFloat
+    /// **Minor axis** of the same fitted ellipse, in millimetres (always ≤ `size`).
+    /// `0` means "not reported" — the drawing boundary falls back to a circle.
+    public let minorAxis: CGFloat
+    /// Orientation of the major axis, in radians in the sensor's **y-up** frame
+    /// (hardware-quantized to π/64 steps; ≈π/2 when the finger lies along the
+    /// mouse's long axis). Consumers drawing in y-down space negate it.
+    public let angle: CGFloat
 
     public init(
         deviceID: MouseDeviceID,
@@ -43,7 +57,9 @@ public struct SurfaceTouch: Sendable, Identifiable, Equatable, Codable {
         position: CGPoint,
         phase: TouchPhase,
         timestamp: TimeInterval,
-        size: CGFloat
+        size: CGFloat,
+        minorAxis: CGFloat = 0,
+        angle: CGFloat = 0
     ) {
         self.deviceID = deviceID
         self.id = id
@@ -51,5 +67,27 @@ public struct SurfaceTouch: Sendable, Identifiable, Equatable, Codable {
         self.phase = phase
         self.timestamp = timestamp
         self.size = size
+        self.minorAxis = minorAxis
+        self.angle = angle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceID, id, position, phase, timestamp, size, minorAxis, angle
+    }
+
+    /// Lenient decode for the two fields added after v1, so a `TouchRecording` made
+    /// before they existed still replays — the ellipse just falls back to a circle.
+    /// Same rule `ZoneLayout` / `GestureConfig` already follow (docs/09 §Persistence).
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            deviceID: try c.decode(MouseDeviceID.self, forKey: .deviceID),
+            id: try c.decode(Int32.self, forKey: .id),
+            position: try c.decode(CGPoint.self, forKey: .position),
+            phase: try c.decode(TouchPhase.self, forKey: .phase),
+            timestamp: try c.decode(TimeInterval.self, forKey: .timestamp),
+            size: try c.decode(CGFloat.self, forKey: .size),
+            minorAxis: try c.decodeIfPresent(CGFloat.self, forKey: .minorAxis) ?? 0,
+            angle: try c.decodeIfPresent(CGFloat.self, forKey: .angle) ?? 0)
     }
 }

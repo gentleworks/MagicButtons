@@ -8,12 +8,22 @@ import TouchKit
 ///
 /// `SurfaceTouch.position` is normalized `0...1`, origin **bottom-left**; SwiftUI
 /// is top-left, so `y` is flipped once here, at the drawing boundary.
+/// The Magic Mouse touch surface's physical size. `MTDeviceGetSensorSurfaceDimensions`
+/// reports ¹⁄₁₀₀ mm, so the "5152×9056" in docs/04 is **51.52 × 90.56 mm** — not an
+/// abstract sensor grid. Contact axes arrive in millimetres, and the surface is
+/// aspect-locked to the shell, so `width / widthMM` and `height / heightMM` are the
+/// same number: one points-per-mm converts a contact in every direction.
+private enum MouseSurface {
+    static let widthMM: CGFloat = 51.52
+    static let heightMM: CGFloat = 90.56
+    static var aspect: CGFloat { widthMM / heightMM }
+}
+
 public struct VisualizerView: View {
     private let model: VisualizerModel
 
-    /// Magic Mouse sensor is portrait (docs/04: ~5152×9056). The surface keeps
-    /// that aspect so dot positions read true.
-    private let mouseAspect: CGFloat = 5152.0 / 9056.0
+    /// Portrait, at the shell's true aspect, so contact positions read true.
+    private let mouseAspect: CGFloat = MouseSurface.aspect
 
     /// The gesture badge's scale-in is decorative — the badge appearing at all is the
     /// signal — so it cross-fades instead for anyone who's asked for less motion.
@@ -134,17 +144,24 @@ public struct VisualizerView: View {
 
     private func touchDots(in size: CGSize) -> some View {
         ForEach(model.touches, id: \.id) { t in
-            let d = dotDiameter(for: t)
+            // The contact patch at its true physical size and orientation. The old dot
+            // was clamped absolute points, so it did not scale with the surface — 58% of
+            // true size in the Visualizer window and 113% of it in the Advanced mini-map —
+            // and being a circle it drew the *major* axis in both directions.
+            let ppmm = size.width / MouseSurface.widthMM
             // The ring carries more weight than it did: a `.began` dot is green sitting on
             // the green middle band, and the outline is the only thing separating the two.
             // 1.5pt rather than 2 because `.primary` inverts — 2pt is right in dark mode but
             // heavy-handed in light. A hollow dot for `.ended` was tried and reverted: it
             // reads as *less* present, and `.ended` spans only raw states 5–7 (~3 frames), so
             // no amount of restyling makes it legible — that needs a timed hold, not a style.
-            Circle()
+            Ellipse()
                 .fill(phaseColor(t.phase))
-                .frame(width: d, height: d)
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.75), lineWidth: 1.5))
+                .frame(width: t.size * ppmm, height: minorAxis(of: t) * ppmm)
+                .overlay(Ellipse().strokeBorder(Color.primary.opacity(0.75), lineWidth: 1.5))
+                // Sensor space is y-up and SwiftUI is y-down, so the orientation negates —
+                // the same single flip `point(for:in:)` applies to the position.
+                .rotationEffect(.radians(-Double(t.angle)))
                 .position(point(for: t, in: size))
         }
     }
@@ -155,10 +172,10 @@ public struct VisualizerView: View {
                 y: (1 - t.position.y) * size.height)
     }
 
-    /// `SurfaceTouch.size` (major axis) runs ~8–10, not `0...1` (see the
-    /// touch-size-scale note / docs/04), so scale it into a sensible dot.
-    private func dotDiameter(for t: SurfaceTouch) -> CGFloat {
-        min(max(t.size * 3.0, 12), 44)
+    /// A frame that predates the minor axis — an old recording, or a synthetic source —
+    /// reports `0`; fall back to a circle rather than drawing a degenerate sliver.
+    private func minorAxis(of t: SurfaceTouch) -> CGFloat {
+        t.minorAxis > 0 ? t.minorAxis : t.size
     }
 
     // MARK: Caption
@@ -216,7 +233,8 @@ public struct VisualizerView: View {
     model.update([
         SurfaceTouch(deviceID: MouseDeviceID(raw: 1), id: 1,
                      position: CGPoint(x: 0.5, y: 0.7),
-                     phase: .moved, timestamp: 0, size: 9),
+                     phase: .moved, timestamp: 0,
+                     size: 9.6, minorAxis: 7.6, angle: 1.571),
     ])
     return VisualizerView(model: model)
         .frame(width: 240, height: 460)

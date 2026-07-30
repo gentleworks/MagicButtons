@@ -110,7 +110,9 @@ public final class MultitouchSource: TouchSource, @unchecked Sendable {
                                   y: CGFloat(t.normalized.position.y)),
                 phase: phase,
                 timestamp: t.timestamp,
-                size: CGFloat(t.majorAxis)))
+                size: CGFloat(t.majorAxis),
+                minorAxis: CGFloat(t.minorAxis),
+                angle: CGFloat(t.angle)))
         }
         hasReceivedFrame = true
         let delivered = frame // immutable copy to hand across the queue boundary
