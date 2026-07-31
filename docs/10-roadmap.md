@@ -56,7 +56,7 @@ place without building them now.
   2026-07-30, which deliberately stopped at the UI's labels and left the visualizer's
   *picture* alone. Three strands, in dependency order:
   1. **Feed the visualizer from the interpreting machinery.** Per-contact accumulation
-     (`sqrt(dx²+dy²)` from the `.began` origin) is currently implemented **twice** —
+     (distance from the `.began` origin) is currently implemented **twice** —
      `MouseGestureRecognizer.swift:163` and `ContactMetrics.swift:219`, the latter
      "deliberately parallel" per its own header. **Decision: unify to one accumulator**
      rather than add a third copy in the visualizer, so what's drawn is what decides.
@@ -69,13 +69,20 @@ place without building them now.
      Costs a mirror of `TapVerdict` on the visualizer side; that's the boundary's price.
   2. **Draw the tap-travel budget** around the contact origin, so you can see how close a
      tap came to being rejected as a drag, and *which* gate it tripped (`TapVerdict`
-     already answers that). **It is an ellipse, not a circle:** travel is Euclidean in
-     *normalized* space while the sensor is portrait ~9056/5152 ≈ 1.76:1, so the same
-     normalized travel is ~1.76× more physical distance vertically. Worth deciding
-     separately whether the **gate itself** should be aspect-corrected — that's a
-     recognizer change, and this visualization is what makes it auditable.
-     A separate "just landed" cue was considered and **dropped as redundant** with this
-     (and `holdBegan` already flashes its own badge).
+     already answers that). A separate "just landed" cue was considered and **dropped as
+     redundant** with this (and `holdBegan` already flashes its own badge).
+
+     **Aspect-ratio question: RESOLVED — the gate itself was corrected.** It shipped
+     first as an ellipse, faithfully, because the gate *was* anisotropic (normalized
+     Euclidean on a 1.76:1 portrait sensor). Drawing that shape is what made the problem
+     legible: hands-on, drift proved not to favour fore-aft the way the gate assumed, and
+     the logged still press had already shown near-equal physical drift being scored ~2×
+     on `x`. Travel is now Euclidean in **millimetres** and the ring is a circle
+     (docs/04 §Why travel is measured in millimetres). The two remaining travel
+     questions are separate and still open: whether the gate should judge the
+     **high-water** or the **displacement at lift** (a finger that rolls and settles is
+     rejected today), and whether 4.1 mm is the right radius — both want a
+     `log-gestures` session rather than an argument.
   3. **The visualizer for users who can't see it.** The code is modest (~40–60 lines:
      the surface as one accessibility element with a live value, plus announcements) but
      the *design* is the cost — continuous finger movement floods

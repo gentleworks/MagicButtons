@@ -8,17 +8,6 @@ import TouchKit
 ///
 /// `SurfaceTouch.position` is normalized `0...1`, origin **bottom-left**; SwiftUI
 /// is top-left, so `y` is flipped once here, at the drawing boundary.
-/// The Magic Mouse touch surface's physical size. `MTDeviceGetSensorSurfaceDimensions`
-/// reports ¹⁄₁₀₀ mm, so the "5152×9056" in docs/04 is **51.52 × 90.56 mm** — not an
-/// abstract sensor grid. Contact axes arrive in millimetres, and the surface is
-/// aspect-locked to the shell, so `width / widthMM` and `height / heightMM` are the
-/// same number: one points-per-mm converts a contact in every direction.
-private enum MouseSurface {
-    static let widthMM: CGFloat = 51.52
-    static let heightMM: CGFloat = 90.56
-    static var aspect: CGFloat { widthMM / heightMM }
-}
-
 public struct VisualizerView: View {
     private let model: VisualizerModel
 
@@ -54,7 +43,7 @@ public struct VisualizerView: View {
                 zoneBands(in: size).clipShape(outline)
                 boundaryLines(in: size).clipShape(outline)
                 outline.strokeBorder(Color.primary.opacity(0.35), lineWidth: 1.5)
-                // Rings *over* the contact, not under. The budget is 6.2 x 10.9 mm and a
+                // Rings *over* the contact, not under. The budget is 8.2 mm across and a
                 // fingertip patch is ~11 x 8 mm — they are nearly the same size, so the
                 // two always overlap and the annotation has to sit on top or it is buried
                 // in exactly the cases worth reading.
@@ -148,18 +137,23 @@ public struct VisualizerView: View {
     // MARK: Travel budget
 
     /// The tap-travel budget around each contact's origin: how far this finger may drift
-    /// before it stops being a tap. The gate is Euclidean in **normalized** space, and
-    /// the surface is aspect-true, so it draws as a portrait ellipse ~1.76:1 — that shape
-    /// *is* the gate's real anisotropy, not a drawing artifact (docs/10 §Visualizer).
+    /// before it stops being a tap. The gate is Euclidean in **millimetres**, so it draws
+    /// as a true circle — one allowance whichever way the finger goes. It drew as a
+    /// portrait ~1.76:1 ellipse until 1.1.3, faithfully, because the gate itself was
+    /// anisotropic; drawing that shape is what made the problem visible enough to fix
+    /// (docs/10 §Visualizer).
     private func budgetRings(in size: CGSize) -> some View {
-        ForEach(model.budgets) { b in
+        // The same points-per-mm the contacts use — the view is aspect-locked to the
+        // surface, so one scalar converts a millimetre in any direction.
+        let ppmm = size.width / MouseSurface.widthMM
+        return ForEach(model.budgets) { b in
             // Latched on the **high-water**, not on live displacement: coming back inside
             // does not restore a spent budget, so once this is true it stays true for the
             // contact's life. Tested on the measurement rather than on
             // `verdict == .rejectedTravel`, because the verdict reports the *first* gate to
             // fail in order — a contact that outran both the tap window and the budget
             // names duration, and would otherwise never show as tripped here.
-            let exceeded = b.maxTravel > b.budget
+            let exceeded = b.maxTravelMM > b.budgetMM
             ZStack {
                 // Where the finger is **now**, relative to where it started: a ring through
                 // the contact's own centre that grows and shrinks as you move. This is the
@@ -169,21 +163,21 @@ public struct VisualizerView: View {
                 // spent, and the latch below says that. Both cross the boundary at the same
                 // instant, since the high-water is set by this very value.
                 if !exceeded {
-                    Ellipse()
+                    Circle()
                         // `.primary`, not the accent: the contact underneath is accent-filled,
                         // so an accent ring on top of it disappears into its own colour.
                         .stroke(Color.primary.opacity(0.85), lineWidth: 1)
-                        .frame(width: b.displacement * size.width * 2,
-                               height: b.displacement * size.height * 2)
+                        .frame(width: b.displacementMM * ppmm * 2,
+                               height: b.displacementMM * ppmm * 2)
                 }
                 // The budget itself. Solid once travel has exceeded it, dashed while
                 // there is headroom — so the state is not carried by colour alone.
-                Ellipse()
+                Circle()
                     .stroke(exceeded ? Color.red : Color.primary.opacity(0.55),
                             style: exceeded ? StrokeStyle(lineWidth: 2)
                                             : StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .frame(width: b.budget * size.width * 2,
-                           height: b.budget * size.height * 2)
+                    .frame(width: b.budgetMM * ppmm * 2,
+                           height: b.budgetMM * ppmm * 2)
                 // The origin, so the ring's anchor stays visible once the finger drifts.
                 Circle().fill(Color.primary.opacity(0.5)).frame(width: 4, height: 4)
             }

@@ -40,7 +40,9 @@ still works too; the tap-derived drags are the no-press alternative.
 A single contact is a *tap* iff, from `.began` to `.ended`:
 
 - **Duration** ≤ `maxDuration` (default 0.18 s),
-- **Travel** ≤ `maxTravel` (default 0.06 normalized),
+- **Travel** ≤ `maxTravelMM` (default 4.1 mm) — a **physical** distance from where the
+  finger landed, so the allowance is a circle: the same drift in any direction spends
+  the same budget (see docs/04 §Why travel is measured in millimetres),
 - **Contact size** stayed ≤ `maxSize` throughout (rejects palm/heel),
 - **No physical click** during its lifetime (`requireNoPhysicalClick`) — a real
   hardware click is the OS's job; we must not duplicate it.
@@ -67,7 +69,7 @@ The recognizer emits `ButtonGesture`; a thin policy in `App` maps each to
 public struct GestureConfig: Sendable, Codable, Equatable {
     // tap primitive
     public var maxDuration: TimeInterval = 0.18
-    public var maxTravel: CGFloat        = 0.06
+    public var maxTravelMM: CGFloat      = 4.1     // millimetres on the surface, not 0…1
     public var maxSize: CGFloat          = 14      // major-axis scale, not 0…1 (see below)
     public var requireNoPhysicalClick    = true
     // multi-tap / drag timing
@@ -150,7 +152,7 @@ release path (`05-event-output.md`); only the **trigger** differs. Default is
 - **`pressAndHold`** — a **single** contact held **still** past `holdThreshold`,
   with **no** leading tap → drag. Three gates keep it from misfiring: it must be the
   **only** live contact (a two-finger gesture never arms it), it must have stayed
-  **still** on the shell (on-shell travel ≤ `maxTravel` — a finger *slide* is a
+  **still** on the shell (on-shell travel ≤ `maxTravelMM` — a finger *slide* is a
   scroll, not a press), and it must have been held ≥ `holdThreshold`. A quick press
   is still an ordinary tap → click; a slow press with no mouse movement is a
   press+release at one spot = a click. No leading tap ⇒ a clean **single-press**
@@ -266,7 +268,7 @@ public final class MouseGestureRecognizer {
 ```
 
 Internal state per live contact (keyed by `SurfaceTouch.id`): origin pos/time,
-begin zone, running max-travel/size, disqualified flag. Plus a small per-zone
+begin zone, running max-travel (mm) / size, disqualified flag. Plus a small per-zone
 machine node holding its current state + timers. Pure function of the frame
 stream + config → fully testable with scripted `SurfaceTouch` frames and a
 `SpyEmitter` (see `05-event-output.md`).

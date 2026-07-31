@@ -63,11 +63,11 @@ Collapsed by default. Power-user tuning, all persisted:
 
 - **Zone boundaries** — `leftEdge` / `rightEdge` sliders, ideally with a live
   mini-visualizer and draggable handles (`06-visualizer.md` calibration).
-- **Timings & thresholds** — `maxDuration`, `maxTravel`, `maxSize`,
+- **Timings & thresholds** — `maxDuration`, `maxTravelMM` (shown in mm), `maxSize`,
   `doubleTapGap`, `holdThreshold` (`GestureConfig`).
 - **Drag style** — `tapAndAHalf` (default) / `pressAndHold` picker
   (`GestureConfig.dragStyle`; `03 §Drag styles`). Global, not per-feature. In
-  `pressAndHold`, `maxTravel` doubles as the press *stillness* budget and
+  `pressAndHold`, `maxTravelMM` doubles as the press *stillness* budget and
   `holdThreshold` as the press duration.
 - **Wait for a second tap before clicking** *(post-v1 — `10-roadmap.md`)* — the
   `.deferred` click timing (`03 §Click timing`), an **orthogonal** toggle. Removes

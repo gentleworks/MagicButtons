@@ -9,6 +9,13 @@ reads the version from the build, and a version in the filename would assert a r
 that hasn't happened. See docs/07 §Release notes.
 -->
 
+Taps now get the same amount of room to wobble in every direction. The limit used to be
+measured on the mouse's own grid, which is taller than it is wide — so a tap could slide
+noticeably further front-to-back than side-to-side before it stopped counting, even
+though a fingertip rolls sideways just as easily. "Max tap travel" in Advanced is now set
+in millimetres, and the visualizer draws it as a circle you can watch your finger move
+inside. If you'd tuned that slider, your setting carries over.
+
 MagicButtons now speaks Spanish. The menu, Settings, the visualizer, and every status and
 error message follow your Mac's language, and numbers, times, and durations are formatted
 the way your region writes them.

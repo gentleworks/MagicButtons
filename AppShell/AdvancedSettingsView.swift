@@ -33,8 +33,12 @@ struct AdvancedSettingsView: View {
             Section("Timings & thresholds") {
                 slider("Max tap duration", model.binding(\.gestures.maxDuration),
                        in: 0.05...0.5, format: seconds)
-                slider("Max tap travel", model.binding(\.gestures.maxTravel),
-                       in: 0.0...0.2, format: percent)
+                // Millimetres, not a percentage of the surface: the gate measures
+                // physical distance, so a percentage would have read against a different
+                // number on each axis. 14 mm ceiling because the old normalized 0.2
+                // converts to 13.66 — nothing clamps when a settings file migrates.
+                slider("Max tap travel", model.binding(\.gestures.maxTravelMM),
+                       in: 0...14, format: millimetres)
                 slider("Max contact size", model.binding(\.gestures.maxSize),
                        in: 2...30, format: number)
                 slider("Double-tap gap", model.binding(\.gestures.doubleTapGap),
@@ -125,5 +129,13 @@ struct AdvancedSettingsView: View {
     }
     private func number<V: BinaryFloatingPoint>(_ v: V) -> String {
         Double(v).formatted(.number.precision(.fractionLength(1)))
+    }
+    /// `.asProvided` for the same reason `seconds` uses it: without it a US locale
+    /// helpfully re-expresses millimetres as inches, and the number stops matching the
+    /// ring the visualizer draws.
+    private func millimetres<V: BinaryFloatingPoint>(_ v: V) -> String {
+        Measurement(value: Double(v), unit: UnitLength.millimeters)
+            .formatted(.measurement(width: .abbreviated, usage: .asProvided,
+                                    numberFormatStyle: .number.precision(.fractionLength(1))))
     }
 }

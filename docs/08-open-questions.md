@@ -71,7 +71,7 @@ iCloud entitlement/container we otherwise avoid.
 - **`MTTouch` struct layout, `state` values, surface dimensions** on the target
   OS — verify on this machine's attached Magic Mouse first (`04`).
 - **Default zone boundaries** (`0.38 / 0.62`) — calibrate from real contact data.
-- **Tap/drag thresholds** (`maxDuration`, `maxTravel`, `maxSize`, `doubleTapGap`,
+- **Tap/drag thresholds** (`maxDuration`, `maxTravelMM`, `maxSize`, `doubleTapGap`,
   `holdThreshold`) — tune on hardware; all exposed in Advanced settings.
 - **Multi-finger false positives** — whether v1 must actively reject any patterns.
 - **Magic Mouse v1 vs v2 property differences** — only needed for the Status

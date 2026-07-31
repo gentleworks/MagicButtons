@@ -154,6 +154,11 @@ current thresholds). It **filters and posts nothing** — pure measurement. Use 
 gather real data before adjusting zone boundaries or tap thresholds. Writes to a
 timestamped file by default, or to `path` if given.
 
+The travel column is `maxTravelMM` — **millimetres**, since 1.1.3. Logs recorded
+before that carry a `maxTravel` column holding a *normalized* distance instead; the
+two differ by ~68× and nothing else in the row distinguishes them, so check the header
+before pooling sessions.
+
 **`log-conflicts [seconds] [tap|hold] [path]`** — The measurement instrument for
 **Feature B** (click/drag de-confliction, `14-post-v1.md`). It runs the *real*
 shipping pipeline — same recognizer and `CGEventEmitter`, with drag promotion armed

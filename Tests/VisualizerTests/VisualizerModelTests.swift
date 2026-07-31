@@ -109,13 +109,13 @@ import TouchKit
 @MainActor
 @Suite struct VisualizerBudgetTests {
     private func budget(
-        id: Int32 = 1, maxTravel: CGFloat = 0.01, displacement: CGFloat? = nil,
+        id: Int32 = 1, maxTravelMM: CGFloat = 1.0, displacementMM: CGFloat? = nil,
         verdict: VisualizerModel.ContactBudget.Verdict = .wouldTap
     ) -> VisualizerModel.ContactBudget {
         VisualizerModel.ContactBudget(id: id, origin: CGPoint(x: 0.5, y: 0.5),
-                                      maxTravel: maxTravel,
-                                      displacement: displacement ?? maxTravel,
-                                      budget: 0.06, verdict: verdict)
+                                      maxTravelMM: maxTravelMM,
+                                      displacementMM: displacementMM ?? maxTravelMM,
+                                      budgetMM: 4.1, verdict: verdict)
     }
 
     private func touch(_ x: CGFloat) -> SurfaceTouch {
@@ -138,9 +138,9 @@ import TouchKit
 
     @Test func updatePublishesBudgets() {
         let model = VisualizerModel()
-        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.03)])
+        model.update([touch(0.5)], budgets: [budget(maxTravelMM: 2.0)])
         #expect(model.budgets.count == 1)
-        #expect(model.budgets.first?.maxTravel == 0.03)
+        #expect(model.budgets.first?.maxTravelMM == 2.0)
         #expect(model.budgets.first?.verdict == .wouldTap)
     }
 
@@ -157,14 +157,14 @@ import TouchKit
     /// so the model must not collapse them.
     @Test func carriesDisplacementApartFromTheHighWaterMark() {
         let model = VisualizerModel()
-        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.05, displacement: 0.01)])
-        #expect(model.budgets.first?.maxTravel == 0.05)
-        #expect(model.budgets.first?.displacement == 0.01)
+        model.update([touch(0.5)], budgets: [budget(maxTravelMM: 3.5, displacementMM: 1.0)])
+        #expect(model.budgets.first?.maxTravelMM == 3.5)
+        #expect(model.budgets.first?.displacementMM == 1.0)
     }
 
     @Test func carriesTheVerdictThatTripped() {
         let model = VisualizerModel()
-        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.09, verdict: .rejectedTravel)])
+        model.update([touch(0.5)], budgets: [budget(maxTravelMM: 6.0, verdict: .rejectedTravel)])
         #expect(model.budgets.first?.verdict == .rejectedTravel)
     }
 }

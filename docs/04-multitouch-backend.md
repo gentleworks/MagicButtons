@@ -163,6 +163,35 @@ row means the layout must be re-derived for that OS before trusting frames.
 |-------|--------|-------|-------------------|-------------|----------|
 | 26.5.2 | 25.5.0 | 25F84 | 96 bytes | sane (pos 0…1, size ≈8–10) | 2026-07-14 |
 
+### Why travel is measured in millimetres
+
+`normalized.position` is normalized **per axis**, and the surface is portrait — so a
+distance computed in that space is not a distance on the mouse. Through 1.1.2 the tap
+gate was Euclidean in normalized units at `maxTravel = 0.06`, which meant:
+
+| direction | allowance |
+|-----------|-----------|
+| side to side | 3.09 mm (0.06 × 51.52) |
+| fore / aft | 5.43 mm (0.06 × 90.56) |
+
+1.76:1, chosen by nobody. The 2026-07-30 probe caught it in the data: on an angled still
+press the centroid drifted **1.60 mm in `x` and 1.45 mm in `y`** — near-equal physically
+— and the gate scored the `x` component ~2× because it was divided by the shorter axis.
+Rolling a fingertip sideways is if anything *easier* than sliding it fore-aft, so the
+bias ran the wrong way as well as being arbitrary.
+
+Since 1.1.3 travel is Euclidean in millimetres (`MouseSurface.millimetres(dx:dy:)`, one
+definition in `TouchKit` shared by the gate and the visualizer), so the budget is a
+circle. The default converts the old one area-preservingly:
+`0.06 × √(51.52 × 90.56)` = **4.1 mm**, which spends the same total allowance — 33%
+looser sideways, 25% tighter fore-aft. Re-scored under it, the angled still press above
+falls from 58% to 53% of budget, so the `pressAndHold` stillness guard (which gates drag
+promotion on this same value) gains a little headroom rather than losing it.
+
+Settings written before the change carry the old key and are converted on decode
+(`GestureConfig.init(from:)`); the `log-gestures` CSV column was renamed `maxTravel` →
+`maxTravelMM` so a pre-change log cannot be silently pooled with a post-change one.
+
 ## `SurfaceTouch` construction (the whole point)
 
 ```swift

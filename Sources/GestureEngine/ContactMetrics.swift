@@ -37,8 +37,9 @@ public struct ContactSample: Sendable, Equatable, Codable {
     public let end: CGPoint
     /// Zone captured at `.began` (the recognizer never reassigns on drift).
     public let beganZone: MouseZone
-    /// Max Euclidean travel from `origin` over the contact's life.
-    public let maxTravel: CGFloat
+    /// Max Euclidean travel from `origin` over the contact's life, in **millimetres**
+    /// (normalized in logs written before 1.1.3 — hence the renamed CSV column).
+    public let maxTravelMM: CGFloat
     /// Max contact size over the contact's life (major-axis scale, ~8–10 per
     /// finger; [[touch-size-scale]]).
     public let maxSize: CGFloat
@@ -57,7 +58,7 @@ public struct ContactSample: Sendable, Equatable, Codable {
         origin: CGPoint,
         end: CGPoint,
         beganZone: MouseZone,
-        maxTravel: CGFloat,
+        maxTravelMM: CGFloat,
         maxSize: CGFloat,
         sawPhysicalClick: Bool,
         frameCount: Int
@@ -69,7 +70,7 @@ public struct ContactSample: Sendable, Equatable, Codable {
         self.origin = origin
         self.end = end
         self.beganZone = beganZone
-        self.maxTravel = maxTravel
+        self.maxTravelMM = maxTravelMM
         self.maxSize = maxSize
         self.sawPhysicalClick = sawPhysicalClick
         self.frameCount = frameCount
@@ -84,7 +85,7 @@ public struct ContactSample: Sendable, Equatable, Codable {
     /// the recognizer (physical-click → duration → travel → size).
     public func verdict(against config: GestureConfig) -> TapVerdict {
         ContactAccumulator.verdict(
-            duration: duration, maxTravel: maxTravel, maxSize: maxSize,
+            duration: duration, maxTravelMM: maxTravelMM, maxSize: maxSize,
             sawPhysicalClick: sawPhysicalClick, config: config)
     }
 }
@@ -94,8 +95,13 @@ public struct ContactSample: Sendable, Equatable, Codable {
 extension ContactSample {
     /// Column header for the logged CSV (matches `csvRow`). The trailing `verdict`
     /// column is evaluated against whatever config the session ran on.
+    ///
+    /// `maxTravelMM` was `maxTravel`, holding a *normalized* distance, before 1.1.3.
+    /// The column is renamed rather than reused so a pre-change log and a post-change
+    /// one cannot be concatenated and analyzed as one distribution — the numbers differ
+    /// by ~68× and nothing else in the row would give that away.
     public static let csvHeader =
-        "device,contactID,beganTime,duration,originX,originY,endX,endY,zone,maxTravel,maxSize,sawPhysicalClick,frameCount,verdict"
+        "device,contactID,beganTime,duration,originX,originY,endX,endY,zone,maxTravelMM,maxSize,sawPhysicalClick,frameCount,verdict"
 
     /// One CSV line for this sample, with the tap `verdict` evaluated against
     /// `config`. Floats are fixed to a few decimals so the file stays diff-friendly
@@ -111,7 +117,7 @@ extension ContactSample {
             f(origin.x), f(origin.y),
             f(end.x), f(end.y),
             String(describing: beganZone),
-            f(maxTravel), f(maxSize, 2),
+            f(maxTravelMM), f(maxSize, 2),
             sawPhysicalClick ? "1" : "0",
             String(frameCount),
             verdict(against: config).rawValue,
@@ -169,7 +175,7 @@ public final class ContactMetricsRecorder {
                     origin: s.origin,
                     end: s.last,
                     beganZone: s.zone,
-                    maxTravel: s.maxTravel,
+                    maxTravelMM: s.maxTravelMM,
                     maxSize: s.maxSize,
                     sawPhysicalClick: s.sawPhysicalClick,
                     frameCount: s.frameCount))
@@ -222,7 +228,7 @@ public struct ContactSummary: Sendable, Equatable {
         byZone[s.beganZone, default: 0] += 1
         byVerdict[s.verdict(against: config), default: 0] += 1
         accumulate(&durationSum, &durationMin, &durationMax, s.duration)
-        accumulate(&travelSum, &travelMin, &travelMax, Double(s.maxTravel))
+        accumulate(&travelSum, &travelMin, &travelMax, Double(s.maxTravelMM))
         accumulate(&sizeSum, &sizeMin, &sizeMax, Double(s.maxSize))
         accumulate(&beganYSum, &beganYMin, &beganYMax, Double(s.origin.y))
     }

@@ -33,26 +33,29 @@ public final class VisualizerModel {
         }
 
         public let id: Int32
-        /// Normalized, origin bottom-left — the point travel is measured from.
+        /// Normalized, origin bottom-left — the point travel is measured from. The only
+        /// field still in normalized space, because it is a *position* on the surface;
+        /// the three below are *distances*, and those are millimetres.
         public let origin: CGPoint
-        /// Greatest distance from `origin` reached so far — **the value judged**. It
-        /// ratchets, so it is what decides whether the budget was ever spent.
-        public let maxTravel: CGFloat
+        /// Greatest distance from `origin` reached so far, in millimetres — **the value
+        /// judged**. It ratchets, so it is what decides whether the budget was spent.
+        public let maxTravelMM: CGFloat
         /// Distance from `origin` right now, which falls again when the finger comes
-        /// back. Drawn, but never judged. Named apart from `maxTravel` on purpose: the
+        /// back. Drawn, but never judged. Named apart from `maxTravelMM` on purpose: the
         /// two are equal until the finger retreats, which makes them easy to confuse.
-        public let displacement: CGFloat
-        /// The threshold `maxTravel` is judged against, normalized.
-        public let budget: CGFloat
+        public let displacementMM: CGFloat
+        /// The threshold `maxTravelMM` is judged against, in millimetres. Equal in every
+        /// direction, so the ring drawn from it is a circle.
+        public let budgetMM: CGFloat
         public let verdict: Verdict
 
-        public init(id: Int32, origin: CGPoint, maxTravel: CGFloat, displacement: CGFloat,
-                    budget: CGFloat, verdict: Verdict) {
+        public init(id: Int32, origin: CGPoint, maxTravelMM: CGFloat, displacementMM: CGFloat,
+                    budgetMM: CGFloat, verdict: Verdict) {
             self.id = id
             self.origin = origin
-            self.maxTravel = maxTravel
-            self.displacement = displacement
-            self.budget = budget
+            self.maxTravelMM = maxTravelMM
+            self.displacementMM = displacementMM
+            self.budgetMM = budgetMM
             self.verdict = verdict
         }
     }

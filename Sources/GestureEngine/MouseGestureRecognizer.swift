@@ -23,16 +23,16 @@ public struct LiveContact: Sendable, Equatable, Identifiable {
     /// The `.began` position travel is measured from, normalized, origin bottom-left.
     public let origin: CGPoint
     public let zone: MouseZone
-    /// Greatest Euclidean distance from `origin` reached so far, in normalized space.
+    /// Greatest Euclidean distance from `origin` reached so far, in **millimetres**.
     /// **This is the value the gate judges** — it ratchets and never falls.
-    public let maxTravel: CGFloat
-    /// Distance from `origin` *right now*, which falls again when the finger comes
-    /// back. Judged on nothing; carried so a display can show where the finger is
-    /// against the threshold rather than only how far it once got.
-    public let displacement: CGFloat
-    /// The `maxTravel` this contact will actually be judged against — carried from the
-    /// recognizer's own live config so a drawn ring cannot show a stale threshold.
-    public let travelBudget: CGFloat
+    public let maxTravelMM: CGFloat
+    /// Distance from `origin` *right now*, in millimetres, which falls again when the
+    /// finger comes back. Judged on nothing; carried so a display can show where the
+    /// finger is against the threshold rather than only how far it once got.
+    public let displacementMM: CGFloat
+    /// The `maxTravelMM` this contact will actually be judged against — carried from
+    /// the recognizer's own live config so a drawn ring cannot show a stale threshold.
+    public let travelBudgetMM: CGFloat
     /// Why this contact would be rejected **if it ended at the last frame seen**, or
     /// `.tap`. Evaluated at that frame's timestamp, never a wall clock, so reading it
     /// does not put a clock into the recognizer.
@@ -41,16 +41,16 @@ public struct LiveContact: Sendable, Equatable, Identifiable {
 
     public init(
         id: Int32, deviceID: MouseDeviceID, origin: CGPoint, zone: MouseZone,
-        maxTravel: CGFloat, displacement: CGFloat, travelBudget: CGFloat,
+        maxTravelMM: CGFloat, displacementMM: CGFloat, travelBudgetMM: CGFloat,
         verdictSoFar: TapVerdict, didBeginHold: Bool
     ) {
         self.id = id
         self.deviceID = deviceID
         self.origin = origin
         self.zone = zone
-        self.maxTravel = maxTravel
-        self.displacement = displacement
-        self.travelBudget = travelBudget
+        self.maxTravelMM = maxTravelMM
+        self.displacementMM = displacementMM
+        self.travelBudgetMM = travelBudgetMM
         self.verdictSoFar = verdictSoFar
         self.didBeginHold = didBeginHold
     }
@@ -183,9 +183,9 @@ public final class MouseGestureRecognizer {
                 deviceID: MouseDeviceID(raw: key.device),
                 origin: state.contact.origin,
                 zone: state.contact.zone,
-                maxTravel: state.contact.maxTravel,
-                displacement: state.contact.displacement,
-                travelBudget: config.maxTravel,
+                maxTravelMM: state.contact.maxTravelMM,
+                displacementMM: state.contact.displacementMM,
+                travelBudgetMM: config.maxTravelMM,
                 verdictSoFar: state.contact.verdict(at: state.contact.lastTime,
                                                     against: config),
                 didBeginHold: state.didBeginHold)
@@ -214,7 +214,7 @@ public final class MouseGestureRecognizer {
     ///
     /// - `.tapAndAHalf`: only a **second** contact (a completed tap preceded it).
     /// - `.pressAndHold`: **any single** contact that stayed **still** (on-shell
-    ///   travel ≤ `maxTravel`), so a resting/deliberate press drags but a finger
+    ///   travel ≤ `maxTravelMM`), so a resting/deliberate press drags but a finger
     ///   *slide* (a scroll) does not. No leading tap → a clean single-press drag.
     ///
     /// Either way a contact that saw a **physical click** never promotes (when
@@ -245,7 +245,7 @@ public final class MouseGestureRecognizer {
             // drag is a separate roadmap feature).
             guard state.followsCount == 1 else { return }
         case .pressAndHold:
-            guard singleContact, state.contact.maxTravel <= config.maxTravel else { return }
+            guard singleContact, state.contact.maxTravelMM <= config.maxTravelMM else { return }
         }
         state.didBeginHold = true
         onGesture?(.holdBegan(zone: state.contact.zone))

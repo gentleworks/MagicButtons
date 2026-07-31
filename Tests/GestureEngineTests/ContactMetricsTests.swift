@@ -76,11 +76,22 @@ private func record(_ frames: [(touches: [SurfaceTouch], click: Bool)],
     }
 
     @Test func maxTravelIsEuclideanPeakOverLife() {
-        // Interim point 0.10 away in x, then returns — peak travel must be recorded.
-        let out = record(contact(at: CGPoint(x: 0.5, y: 0.5),
-                                  interim: [(CGPoint(x: 0.60, y: 0.5), 9)]))
+        // Interim point 5 mm away, then returns — peak travel must be recorded.
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        let out = record(contact(at: origin,
+                                  interim: [(offsetMM(origin, dxMM: 3, dyMM: 4), 9)]))
         #expect(out.count == 1)
-        #expect(abs(out[0].maxTravel - 0.10) < 1e-6)
+        #expect(abs(out[0].maxTravelMM - 5.0) < 1e-6)   // 3-4-5, in millimetres
+    }
+
+    /// The logged number is a physical distance, so it must not depend on which way the
+    /// finger went — the same property the gate now has (docs/04).
+    @Test func travelIsRecordedInMillimetresNotNormalizedUnits() {
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        let sideways = record(contact(at: origin, interim: [(offsetMM(origin, dxMM: 4), 9)]))
+        let foreAft = record(contact(at: origin, interim: [(offsetMM(origin, dyMM: 4), 9)]))
+        #expect(abs(sideways[0].maxTravelMM - 4.0) < 1e-6)
+        #expect(abs(foreAft[0].maxTravelMM - 4.0) < 1e-6)
     }
 
     @Test func maxSizeIsPeakOverLife() {
@@ -138,12 +149,13 @@ private func record(_ frames: [(touches: [SurfaceTouch], click: Bool)],
 
 @Suite struct TapVerdictTests {
     private func sample(
-        duration: TimeInterval = 0.10, travel: CGFloat = 0, size: CGFloat = 9,
+        duration: TimeInterval = 0.10, travelMM: CGFloat = 0, size: CGFloat = 9,
         click: Bool = false
     ) -> ContactSample {
         ContactSample(deviceID: 1, contactID: 1, beganTime: 0, endedTime: duration,
                       origin: .zero, end: .zero, beganZone: .middle,
-                      maxTravel: travel, maxSize: size, sawPhysicalClick: click, frameCount: 2)
+                      maxTravelMM: travelMM, maxSize: size, sawPhysicalClick: click,
+                      frameCount: 2)
     }
 
     @Test func acceptsAContactWithinAllGates() {
@@ -151,16 +163,16 @@ private func record(_ frames: [(touches: [SurfaceTouch], click: Bool)],
     }
 
     @Test func rejectionOrderMatchesRecognizer() {
-        let c = GestureConfig()  // maxDuration 0.18, maxTravel 0.06, maxSize 14
+        let c = GestureConfig()  // maxDuration 0.18, maxTravelMM 4.1, maxSize 14
         // Physical click wins even when every other measure is also out of range.
-        #expect(sample(duration: 1, travel: 1, size: 99, click: true)
+        #expect(sample(duration: 1, travelMM: 20, size: 99, click: true)
                     .verdict(against: c) == .rejectedPhysicalClick)
         // Then duration, before travel/size.
-        #expect(sample(duration: 0.5, travel: 1, size: 99).verdict(against: c) == .rejectedDuration)
+        #expect(sample(duration: 0.5, travelMM: 20, size: 99).verdict(against: c) == .rejectedDuration)
         // Then travel, before size.
-        #expect(sample(duration: 0.10, travel: 0.2, size: 99).verdict(against: c) == .rejectedTravel)
+        #expect(sample(duration: 0.10, travelMM: 20, size: 99).verdict(against: c) == .rejectedTravel)
         // Then size.
-        #expect(sample(duration: 0.10, travel: 0, size: 99).verdict(against: c) == .rejectedSize)
+        #expect(sample(duration: 0.10, travelMM: 0, size: 99).verdict(against: c) == .rejectedSize)
     }
 
     @Test func matchesTheRecognizersRealDecision() {
@@ -183,7 +195,7 @@ private func record(_ frames: [(touches: [SurfaceTouch], click: Bool)],
     @Test func csvHeaderMatchesRowColumnCount() {
         let s = ContactSample(deviceID: 1, contactID: 2, beganTime: 1.5, endedTime: 1.6,
                               origin: CGPoint(x: 0.1, y: 0.4), end: CGPoint(x: 0.11, y: 0.41),
-                              beganZone: .left, maxTravel: 0.02, maxSize: 9.5,
+                              beganZone: .left, maxTravelMM: 1.0, maxSize: 9.5,
                               sawPhysicalClick: false, frameCount: 3)
         let header = ContactSample.csvHeader.split(separator: ",").count
         let row = s.csvRow(verdictAgainst: GestureConfig()).split(separator: ",", omittingEmptySubsequences: false).count
@@ -193,7 +205,7 @@ private func record(_ frames: [(touches: [SurfaceTouch], click: Bool)],
     @Test func csvRowCarriesVerdictAndKeyFields() {
         let s = ContactSample(deviceID: 7, contactID: 3, beganTime: 0, endedTime: 0.5,
                               origin: CGPoint(x: 0.9, y: 0.5), end: CGPoint(x: 0.9, y: 0.5),
-                              beganZone: .right, maxTravel: 0, maxSize: 9,
+                              beganZone: .right, maxTravelMM: 0, maxSize: 9,
                               sawPhysicalClick: false, frameCount: 2)
         let row = s.csvRow(verdictAgainst: GestureConfig())
         #expect(row.hasPrefix("7,3,"))

@@ -70,16 +70,41 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
     }
 
     @Test func tooFarIsRejected() {
-        // Moves 0.10 (> maxTravel 0.06) from origin before lifting.
+        // Moves 6 mm (> maxTravelMM 4.1) from origin before lifting.
+        let origin = CGPoint(x: 0.10, y: 0.5)
         let frames = [
             Frame(touches: [SurfaceTouch(deviceID: device, id: 1,
-                position: CGPoint(x: 0.10, y: 0.5), phase: .began,
+                position: origin, phase: .began,
                 timestamp: 0, size: 0.3)], physicalClickActive: false),
             Frame(touches: [SurfaceTouch(deviceID: device, id: 1,
-                position: CGPoint(x: 0.20, y: 0.5), phase: .ended,
+                position: offsetMM(origin, dxMM: 6), phase: .ended,
                 timestamp: 0.10, size: 0.3)], physicalClickActive: false),
         ]
         #expect(run(frames).isEmpty)
+    }
+
+    /// The regression test for the gate becoming isotropic (docs/04): the budget is a
+    /// distance on the surface, so the *same* drift must score the same whichever way
+    /// the finger goes. Under the old normalized-Euclidean gate these two disagreed —
+    /// 5 mm sideways was rejected and 5 mm fore-aft sailed through, because the sensor
+    /// is 1.76× taller than it is wide.
+    @Test func equalPhysicalDriftIsJudgedTheSameInAnyDirection() {
+        func lifted(after drift: CGPoint) -> [ButtonGesture] {
+            let origin = CGPoint(x: 0.5, y: 0.5)
+            return run([
+                Frame(touches: [SurfaceTouch(deviceID: device, id: 1, position: origin,
+                    phase: .began, timestamp: 0, size: 0.3)], physicalClickActive: false),
+                Frame(touches: [SurfaceTouch(deviceID: device, id: 1, position: drift,
+                    phase: .ended, timestamp: 0.10, size: 0.3)], physicalClickActive: false),
+            ])
+        }
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        // Inside the budget both ways.
+        #expect(lifted(after: offsetMM(origin, dxMM: 3)) == [.click(zone: .middle, count: 1)])
+        #expect(lifted(after: offsetMM(origin, dyMM: 3)) == [.click(zone: .middle, count: 1)])
+        // Outside it both ways.
+        #expect(lifted(after: offsetMM(origin, dxMM: 5)).isEmpty)
+        #expect(lifted(after: offsetMM(origin, dyMM: 5)).isEmpty)
     }
 
     @Test func tooBigIsRejected() {
@@ -408,7 +433,7 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
     }
 
     @Test func slidingFingerDoesNotDrag() {
-        // A finger that slides past maxTravel (0.06) before the threshold is a scroll,
+        // A finger that slides past maxTravelMM (4.1) before the threshold is a scroll,
         // not a press — never promotes, and (too far to be a tap) emits nothing.
         let out = run(held(at: left, hold: 0.30, drift: 0.20), config: cfg)
         #expect(out.isEmpty)
@@ -517,6 +542,18 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
 
 private let deviceB = MouseDeviceID(raw: 2)
 
+/// Offsets a normalized position by a **physical** distance, so a travel test can say
+/// "3 mm to the right" and mean it. Shared with `ContactMetricsTests` (same target).
+///
+/// Worth the indirection because the normalized numbers are not interchangeable: the
+/// surface is 51.52 × 90.56 mm, so 0.03 in `x` is 1.55 mm while 0.03 in `y` is 2.72 mm.
+/// A fixture written in normalized units silently means a different drift on each axis
+/// — which is the exact bug the millimetre gate exists to remove.
+func offsetMM(_ p: CGPoint, dxMM: CGFloat = 0, dyMM: CGFloat = 0) -> CGPoint {
+    CGPoint(x: p.x + dxMM / MouseSurface.widthMM,
+            y: p.y + dyMM / MouseSurface.heightMM)
+}
+
 /// Ingest frames and hand back the recognizer itself, so its *in-flight* state can be
 /// read — `run` above discards it, which is exactly what these tests need to keep.
 private func recognizerAfter(
@@ -547,24 +584,26 @@ private func stillDown(
 
 @Suite struct LiveContactTests {
     @Test func reportsTheOriginTravelIsMeasuredFrom() throws {
-        let r = recognizerAfter(stillDown(from: CGPoint(x: 0.5, y: 0.5),
-                                          to: CGPoint(x: 0.53, y: 0.54)))
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        let r = recognizerAfter(stillDown(from: origin,
+                                          to: offsetMM(origin, dxMM: 3, dyMM: 4)))
         let live = try #require(r.liveContacts.first)
-        #expect(live.origin == CGPoint(x: 0.5, y: 0.5))
-        #expect(abs(live.maxTravel - 0.05) < 1e-9)   // 3-4-5
+        #expect(live.origin == origin)
+        #expect(abs(live.maxTravelMM - 5.0) < 1e-9)   // 3-4-5, in millimetres
     }
 
     /// The budget is spent by the *furthest* excursion, not the current offset — a
     /// finger that wanders and comes back has still used it up, and the ring must
     /// show that rather than snapping shut.
     @Test func maxTravelKeepsTheFurthestPointNotTheLatest() throws {
-        var frames = stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        var frames = stillDown(from: origin, to: offsetMM(origin, dxMM: 3, dyMM: 4))
         frames.append(Frame(
-            touches: [SurfaceTouch(deviceID: device, id: 1, position: CGPoint(x: 0.5, y: 0.5),
+            touches: [SurfaceTouch(deviceID: device, id: 1, position: origin,
                                    phase: .moved, timestamp: 0.1, size: 0.3)],
             physicalClickActive: false))
         let live = try #require(recognizerAfter(frames).liveContacts.first)
-        #expect(abs(live.maxTravel - 0.05) < 1e-9)
+        #expect(abs(live.maxTravelMM - 5.0) < 1e-9)
     }
 
     @Test func clearWhenTheContactEnds() {
@@ -572,16 +611,18 @@ private func stillDown(
     }
 
     @Test func verdictIsTapWhileTheContactIsStillViable() throws {
+        let origin = CGPoint(x: 0.5, y: 0.5)
         let live = try #require(recognizerAfter(
-            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.52, y: 0.52))
+            stillDown(from: origin, to: offsetMM(origin, dxMM: 2))
         ).liveContacts.first)
         #expect(live.verdictSoFar == .tap)
     }
 
     @Test func verdictNamesTheTravelGateOnceTravelExceedsTheBudget() throws {
+        let origin = CGPoint(x: 0.5, y: 0.5)
         let live = try #require(recognizerAfter(
-            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.56, y: 0.58))
-        ).liveContacts.first)   // travel 0.10 > maxTravel 0.06
+            stillDown(from: origin, to: offsetMM(origin, dxMM: 5))
+        ).liveContacts.first)   // 5 mm > maxTravelMM 4.1
         #expect(live.verdictSoFar == .rejectedTravel)
     }
 
@@ -599,36 +640,41 @@ private func stillDown(
     /// from the recognizer's own config rather than being read separately by the view.
     @Test func travelBudgetComesFromTheRecognizersOwnConfig() throws {
         var config = GestureConfig()
-        config.maxTravel = 0.02
+        config.maxTravelMM = 2.0
+        let origin = CGPoint(x: 0.5, y: 0.5)
         let live = try #require(recognizerAfter(
-            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.51, y: 0.5)),
+            stillDown(from: origin, to: offsetMM(origin, dxMM: 1)),
             config: config
         ).liveContacts.first)
-        #expect(live.travelBudget == 0.02)
+        #expect(live.travelBudgetMM == 2.0)
     }
 
-    /// The pair the drawing depends on: `maxTravel` ratchets and is what the gate
-    /// judges, while `displacement` falls again when the finger comes back. A visualizer
-    /// that showed only the high-water could never show what a threshold feels like.
+    /// The pair the drawing depends on: `maxTravelMM` ratchets and is what the gate
+    /// judges, while `displacementMM` falls again when the finger comes back. A
+    /// visualizer that showed only the high-water could never show what a threshold
+    /// feels like.
     @Test func displacementFallsBackWhileMaxTravelHolds() throws {
-        var frames = stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+        let origin = CGPoint(x: 0.5, y: 0.5)
+        var frames = stillDown(from: origin, to: offsetMM(origin, dxMM: 3, dyMM: 4))
         frames.append(Frame(
-            touches: [SurfaceTouch(deviceID: device, id: 1, position: CGPoint(x: 0.51, y: 0.5),
+            touches: [SurfaceTouch(deviceID: device, id: 1,
+                                   position: offsetMM(origin, dxMM: 1),
                                    phase: .moved, timestamp: 0.1, size: 0.3)],
             physicalClickActive: false))
         let live = try #require(recognizerAfter(frames).liveContacts.first)
-        #expect(abs(live.maxTravel - 0.05) < 1e-9)      // furthest ever reached
-        #expect(abs(live.displacement - 0.01) < 1e-9)   // where it is now
+        #expect(abs(live.maxTravelMM - 5.0) < 1e-9)      // furthest ever reached
+        #expect(abs(live.displacementMM - 1.0) < 1e-9)   // where it is now
     }
 
     /// They cross the budget at the same instant — the high-water is set *by* the
     /// displacement — which is what lets the drawing latch on one and draw the other
     /// without the two appearing to disagree.
     @Test func displacementAndMaxTravelAgreeUntilTheFingerRetreats() throws {
+        let origin = CGPoint(x: 0.5, y: 0.5)
         let live = try #require(recognizerAfter(
-            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+            stillDown(from: origin, to: offsetMM(origin, dxMM: 3, dyMM: 4))
         ).liveContacts.first)
-        #expect(live.displacement == live.maxTravel)
+        #expect(live.displacementMM == live.maxTravelMM)
     }
 
     @Test func areOrderedByDeviceThenID() {

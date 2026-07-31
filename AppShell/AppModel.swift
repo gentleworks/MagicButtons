@@ -230,8 +230,8 @@ final class AppModel {
             // the visualizer's own vocabulary so that package stays free of GestureEngine.
             self.visualizer.update(frame, budgets: self.coordinator.liveContacts.map {
                 VisualizerModel.ContactBudget(
-                    id: $0.id, origin: $0.origin, maxTravel: $0.maxTravel,
-                    displacement: $0.displacement, budget: $0.travelBudget,
+                    id: $0.id, origin: $0.origin, maxTravelMM: $0.maxTravelMM,
+                    displacementMM: $0.displacementMM, budgetMM: $0.travelBudgetMM,
                     verdict: Self.budgetVerdict($0.verdictSoFar))
             })
             self.streamHealth.noteFrame(at: ProcessInfo.processInfo.systemUptime)

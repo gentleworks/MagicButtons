@@ -69,4 +69,40 @@ import TouchKit
         #expect(s.zones.leftEdge == 0.2)
         #expect(s.zones.rightEdge == ZoneLayout().rightEdge)
     }
+
+    // MARK: Migration — normalized tap travel → millimetres (1.1.3)
+
+    /// The failure this guards against is silent, not loud: a pre-1.1.3 file stores
+    /// `maxTravel` normalized, and reading `0.06` as millimetres would leave a 0.06 mm
+    /// budget — every tap rejected on travel, with a settings file that still looks
+    /// perfectly reasonable. So the old key is converted, not reused.
+    @Test func legacyNormalizedTravelConvertsToMillimetres() throws {
+        let json = Data(#"{ "gestures": { "maxTravel": 0.06 } }"#.utf8)
+        let s = try JSONDecoder().decode(AppSettings.self, from: json)
+        // Area-preserving: 0.06 × √(51.52 × 90.56) = 4.098 mm, which is the new
+        // default to the tenth the UI shows — an untuned install lands on it exactly.
+        #expect(abs(s.gestures.maxTravelMM - 4.098) < 0.001)
+    }
+
+    /// A tuned value migrates on the same scale rather than snapping to the default.
+    @Test func legacyTravelMigrationPreservesATunedValue() throws {
+        let json = Data(#"{ "gestures": { "maxTravel": 0.12 } }"#.utf8)
+        let s = try JSONDecoder().decode(AppSettings.self, from: json)
+        #expect(abs(s.gestures.maxTravelMM - 8.197) < 0.001)
+    }
+
+    /// A current file wins outright — the legacy key is a fallback, not an override,
+    /// so a round-trip through encode/decode can never re-migrate.
+    @Test func currentTravelKeyBeatsTheLegacyOne() throws {
+        let json = Data(#"{ "gestures": { "maxTravelMM": 6, "maxTravel": 0.06 } }"#.utf8)
+        let s = try JSONDecoder().decode(AppSettings.self, from: json)
+        #expect(s.gestures.maxTravelMM == 6)
+    }
+
+    /// Neither key present → the default, not zero (a zero budget rejects every tap).
+    @Test func absentTravelKeysDefault() throws {
+        let json = Data(#"{ "gestures": { "maxSize": 22 } }"#.utf8)
+        let s = try JSONDecoder().decode(AppSettings.self, from: json)
+        #expect(s.gestures.maxTravelMM == GestureConfig().maxTravelMM)
+    }
 }

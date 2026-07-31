@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import TouchKit
 
 /// How a drag is initiated (docs/03 §The v1 gesture set). Two schemes that share the
 /// same `holdBegan`/`holdEnded` output — only the *trigger* differs:
@@ -28,8 +29,11 @@ public struct GestureConfig: Sendable, Codable, Equatable {
     // MARK: Tap primitive
     /// Max `.began`→`.ended` duration for a contact to count as a tap.
     public var maxDuration: TimeInterval
-    /// Max travel from the `.began` position, normalized `0...1`.
-    public var maxTravel: CGFloat
+    /// Max travel from the `.began` position, in **millimetres** on the physical
+    /// surface — so the allowance is a circle, the same in every direction. Normalized
+    /// `0…1` through 1.1.2, which made it 1.76× looser fore-aft than sideways purely
+    /// because the sensor is portrait; see `ContactAccumulator`.
+    public var maxTravelMM: CGFloat
     /// Max contact size at any point in the contact's life (rejects palm/heel).
     /// On the **major-axis scale** the real `MultitouchSource` delivers — a finger
     /// contact reads ~8–10, *not* normalized `0…1` like `position` (Phase 4;
@@ -60,7 +64,7 @@ public struct GestureConfig: Sendable, Codable, Equatable {
 
     public init(
         maxDuration: TimeInterval = 0.18,
-        maxTravel: CGFloat = 0.06,
+        maxTravelMM: CGFloat = 4.1,
         maxSize: CGFloat = 14,
         requireNoPhysicalClick: Bool = true,
         doubleTapGap: TimeInterval = 0.30,
@@ -69,7 +73,7 @@ public struct GestureConfig: Sendable, Codable, Equatable {
         maxClickCount: Int = 3
     ) {
         self.maxDuration = maxDuration
-        self.maxTravel = maxTravel
+        self.maxTravelMM = maxTravelMM
         self.maxSize = maxSize
         self.requireNoPhysicalClick = requireNoPhysicalClick
         self.doubleTapGap = doubleTapGap
@@ -78,9 +82,18 @@ public struct GestureConfig: Sendable, Codable, Equatable {
         self.maxClickCount = maxClickCount
     }
 
+    /// `maxTravelMM` is deliberately a **new key**, not a reinterpretation of the old
+    /// one: a pre-1.1.3 file stores normalized travel, and reading its `0.06` as
+    /// millimetres would silently reject every tap. Migrated in `init(from:)` below.
     private enum CodingKeys: String, CodingKey {
-        case maxDuration, maxTravel, maxSize, requireNoPhysicalClick
+        case maxDuration, maxTravelMM, maxSize, requireNoPhysicalClick
         case doubleTapGap, holdThreshold, dragStyle, maxClickCount
+    }
+
+    /// The pre-millimetre travel key. Read only to migrate — never written, which is
+    /// why it is kept out of `CodingKeys` (the synthesized `encode(to:)` covers those).
+    private enum LegacyKeys: String, CodingKey {
+        case maxTravel
     }
 
     /// Lenient decode: any **missing** key falls back to its default, so an older or
@@ -90,9 +103,23 @@ public struct GestureConfig: Sendable, Codable, Equatable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = GestureConfig()
+
+        // A file written before the gate became isotropic stores travel normalized,
+        // under the old key. Convert it area-preservingly, so the ellipse it described
+        // and the circle replacing it allow the same amount of drift — the stock 0.06
+        // lands on 4.098 mm, which is the new default to the tenth the UI shows, so an
+        // untuned install migrates onto the default exactly.
+        let migrated: CGFloat? = {
+            guard let legacy = try? decoder.container(keyedBy: LegacyKeys.self),
+                  let normalized = try? legacy.decodeIfPresent(CGFloat.self, forKey: .maxTravel)
+            else { return nil }
+            return normalized * MouseSurface.legacyTravelScale
+        }()
+
         self.init(
             maxDuration: try c.decodeIfPresent(TimeInterval.self, forKey: .maxDuration) ?? d.maxDuration,
-            maxTravel: try c.decodeIfPresent(CGFloat.self, forKey: .maxTravel) ?? d.maxTravel,
+            maxTravelMM: try c.decodeIfPresent(CGFloat.self, forKey: .maxTravelMM)
+                ?? migrated ?? d.maxTravelMM,
             maxSize: try c.decodeIfPresent(CGFloat.self, forKey: .maxSize) ?? d.maxSize,
             requireNoPhysicalClick: try c.decodeIfPresent(Bool.self, forKey: .requireNoPhysicalClick) ?? d.requireNoPhysicalClick,
             doubleTapGap: try c.decodeIfPresent(TimeInterval.self, forKey: .doubleTapGap) ?? d.doubleTapGap,

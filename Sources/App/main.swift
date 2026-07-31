@@ -368,8 +368,8 @@ final class CalibrationSink {
         write(sample.csvRow(verdictAgainst: config))
         summary.add(sample, config: config)
         count += 1
-        print(String(format: "  #%-3d %-6@ dur=%.3f travel=%.4f size=%.1f y=%.2f%@ → %@",
-                     count, "\(sample.beganZone)", sample.duration, sample.maxTravel,
+        print(String(format: "  #%-3d %-6@ dur=%.3f travel=%.2fmm size=%.1f y=%.2f%@ → %@",
+                     count, "\(sample.beganZone)", sample.duration, sample.maxTravelMM,
                      sample.maxSize, sample.origin.y,
                      sample.sawPhysicalClick ? " [click]" : "",
                      sample.verdict(against: config).rawValue))
@@ -502,7 +502,7 @@ func printCalibrationSummary(_ s: ContactSummary, config: GestureConfig,
     }
     print("")
     line("duration", s.duration, "maxDuration \(config.maxDuration)")
-    line("travel",   s.travel,   "maxTravel \(config.maxTravel)")
+    line("travel/mm", s.travel,  "maxTravelMM \(config.maxTravelMM)")
     line("size",     s.size,     "maxSize \(config.maxSize)")
     line("beganY",   s.beganY,   "(y rejection band — off by default, docs/08 §A)")
     print("────────────────────────────────────────────────────")
