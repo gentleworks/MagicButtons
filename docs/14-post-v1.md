@@ -893,7 +893,7 @@ own rule, and to survive the other's.
 - **Duration calibration**, unrelated but noticed: four short contacts ran 0.150 / 0.180 /
   0.255 / 0.300 s against `maxDuration` 0.18.
 
-## Visualizer: the spoken readout ✅ *(strand 3; code + tests done; **HW VoiceOver verification outstanding**; 270 tests)*
+## Visualizer: the spoken readout ✅ *(strand 3; done; HW VoiceOver-verified 2026-07-31; 271 tests)*
 
 Strand 3 of `10-roadmap.md` §Visualizer — the picture, for someone who can't see it. The
 line estimate held (~60 lines of view + model). What it got wrong was *which* design
@@ -964,16 +964,29 @@ caption's existing `%lld contacts`, plural variations and all, so the two can't 
 
 ### Tests
 
-Nine, driven through the model rather than the gate directly, since the frame →
+Ten, driven through the model rather than the gate directly, since the frame →
 active-zone → announcement path is the thing that has to hold. The gate takes its clock as
 a parameter (the `StreamHealthMonitor` idiom), so a 0.35 s dwell is tested without waiting
 0.35 s. The two that carry the design: `aTapIsTooBriefToSpeakItsZone` and
 `aGestureSuppressesTheZoneItAlreadyNamed` — each pins one half of the ranking above, and
-either failing means the readout has gone back to narrating taps.
+either failing means the readout has gone back to narrating taps. Both were confirmed by
+mutation, and each failed only its own.
 
-### Still open
+`aZoneWaitsItsTurnBehindAGestureInAnotherZone` exists because the first comment written for
+`minimumGap` was wrong: it claimed the gap stops a finger stuttering along a boundary, which
+it cannot — changing zone restarts the dwell, so two zone announcements are always at least
+`dwell` apart on their own. Tracing it properly showed the gap is reachable only with **two
+fingers** (one resting in the middle while another taps left), and that it *defers* rather
+than drops. Narrow enough to look like dead code, so it is pinned.
 
-- **Hardware VoiceOver iteration.** The dwell and the wording are judged by ear; nothing
-  here has been heard yet. `AnnouncementGate.dwell` is the one number to turn.
-- **`controlActiveState` is untested** — it needs a real window, so it is verified by use,
-  not by suite.
+### Exit ✅ (HW VoiceOver-verified 2026-07-31)
+
+Heard on hardware with VoiceOver on: gestures announce clearly and name the zone they fired
+in, and a finger settling speaks its zone. `dwell` at 0.35 s and the wording both stood up
+by ear on the first pass — nothing turned.
+
+`controlActiveState` had no test behind it (it needs a real window), so the ear was the only
+instrument: mouse use outside the app is silent, and the readout speaks only while its own
+window is in front. Confirmed as the wanted behaviour, not merely the built one — the
+alternative considered and declined was to speak whenever the Visualizer window is *open*,
+which would make forgetting to close it narrate every mouse touch all day.

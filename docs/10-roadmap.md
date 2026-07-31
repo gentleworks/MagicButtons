@@ -109,8 +109,9 @@ place without building them now.
      user brushed the mouse, in every app, all day. Posting lives in the view, gated on
      VoiceOver running and the window being frontmost.
 
-     **Still wants VoiceOver-on hardware iteration** — the dwell (0.35 s) and the
-     announcement wording are judged by ear, not by test.
+     **HW VoiceOver-verified 2026-07-31.** The dwell (0.35 s) and the wording are judged
+     by ear rather than by test, and both stood up on the first pass; nothing turned.
+     Forefront-only scoping confirmed as wanted, not merely as built.
 
   Note phase is **not** a travel signal and never was: raw state 3 → `.began` fires for a
   single frame (`PhaseMapping.swift`, pinned from bring-up as `3 → 4 … 4 → 5 → 6 → 7`),
