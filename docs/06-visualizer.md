@@ -10,12 +10,23 @@ and the behavior can never disagree.
 - An outline of the Magic Mouse shell (rounded top view).
 - The three zones (left / middle / right) as tinted bands, boundaries driven by
   the live `ZoneLayout`.
-- One dot per live contact, positioned from `SurfaceTouch.position`, sized from
-  `SurfaceTouch.size`.
+- One **contact patch** per live contact, drawn as the ellipse the hardware fits to
+  it — `size` (major axis) × `minorAxis`, rotated by `angle`, all in millimetres —
+  at its true physical size. Tinted by phase (began/moved/ended). It was a
+  fixed-point circle until 1.1.3, which drew the major axis in both directions and
+  did not scale with the view: 58% of true size in the standalone window, 113% of it
+  in the Advanced mini-map.
+- The **tap-travel budget** around each contact's origin: a dashed circle at
+  `maxTravelMM`, plus a live ring at the contact's current displacement, so you can
+  see how close a tap is to being rejected as a drag. The budget latches solid red
+  once the high-water passes it, and the inner ring disappears — that trip is what
+  explains the dashed circle without a caption. See docs/10 §Visualizer for why the
+  drawn ring is *displacement* while the *high-water* decides.
 - The **active zone** highlighted when a finger is present (using `ZoneMapper`
   with hysteresis so it doesn't strobe at boundaries).
-- Optional: fading trail, contact id label, phase tint (began/moved/ended) —
-  useful during bring-up and threshold tuning.
+- A **gesture badge** naming the zone and gesture when one registers, auto-clearing
+  after 900 ms (docs/09 §Advanced).
+- Optional: fading trail, contact id label — useful during bring-up.
 
 ## Data feed
 
@@ -31,8 +42,22 @@ public final class VisualizerModel: ObservableObject {
 }
 ```
 
+*As built:* `@Observable` rather than the `ObservableObject`/`@Published` sketched
+above (macOS 14 + Swift 6), and `update(_:budgets:)` also carries a
+`[ContactBudget]` — the travel rings. That is the visualizer's **own** value type,
+not `GestureEngine.LiveContact`: the package still depends on `TouchKit` alone, and
+`AppShell/AppModel` translates, exactly as it already does for `ButtonGesture` →
+`RecognizedGesture`. The cost is a mirrored `TapVerdict`; that is the boundary's
+price, paid deliberately.
+
+`budgets` defaults empty, so a source with no recognizer behind it — SwiftUI
+previews, the `mb-dev visualize` harness — still drives the picture, just without
+rings.
+
 `AppCoordinator` fans each frame here (marshaled to main) in parallel with the
-recognizer. The visualizer never drives behavior; it's a pure sink.
+recognizer, reading the budgets *after* `ingest` so they are the same frame's
+measurements taken from the recognizer that judges them. The visualizer never drives
+behavior; it's a pure sink.
 
 ## Coordinate handling
 
@@ -65,5 +90,16 @@ middle button" from a guess into a direct-manipulation setting.
 
 ## Non-goals
 
-- Not a hardware-accurate render; a stylized top-view outline is enough.
-- No dependency on the recognizer or emitter — strictly a view over the stream.
+- The **shell** is stylized — a rounded top-view outline is enough, and it is not a
+  render of the real hardware. What sits *on* it is no longer stylized, though: the
+  contact patch and the travel budget are drawn at true physical size, from
+  `MouseSurface` in `TouchKit` (51.52 × 90.56 mm, measured — docs/04). That started
+  as a fidelity fix for a dot that didn't scale, and turned out to be the thing that
+  made the gate's own aspect bias visible enough to fix.
+- No dependency on the recognizer or emitter — strictly a view over the stream. The
+  travel rings do **not** breach this: the numbers arrive as the visualizer's own
+  value type, translated at the composition layer.
+- **Not yet non-visual.** Everything above is sight-only; the surface has no
+  accessibility representation. Tracked as strand 3 in docs/10 §Visualizer, and it is
+  the reason the picture is deliberately readable without colour alone (the badge
+  names its zone, the tripped budget changes dash *and* weight, not just hue).

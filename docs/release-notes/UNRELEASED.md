@@ -9,6 +9,16 @@ reads the version from the build, and a version in the filename would assert a r
 that hasn't happened. See docs/07 §Release notes.
 -->
 
+The visualizer shows your finger the way the mouse actually sees it. Each contact is drawn
+at its real size and angle instead of as a same-sized dot, so it grows as you press and
+turns as you roll — and it now scales with the window instead of staying a fixed blob.
+
+The visualizer also shows how much room a tap has left. A dashed circle marks how far your
+finger may drift and still count as a tap, and a second ring tracks where your finger is
+right now, growing and shrinking as you move. Go too far and the dashed circle turns solid
+red — that's the moment the tap stopped counting. It's the quickest way to see what "Max
+tap travel" in Advanced actually means before you change it.
+
 Taps now get the same amount of room to wobble in every direction. The limit used to be
 measured on the mouse's own grid, which is taller than it is wide — so a tap could slide
 noticeably further front-to-back than side-to-side before it stopped counting, even

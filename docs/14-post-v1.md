@@ -782,3 +782,113 @@ two copies means two `CGEventTap`s both synthesizing clicks (§Interceptor lifet
 No `CFBundleLocalizations` key is required — the `.lproj` directories are authoritative.
 Adding one is a common suggestion for this symptom and the wrong fix: it buys nothing and
 leaves a hand-maintained language list to drift out of sync with the catalogs.
+
+## Visualizer: true-size contacts, the travel budget, and a circular gate ✅ *(done; HW-verified 2026-07-30 — commits `4834367`, `ef2d980`, `8c39c7d`, `0414926`, `67d0746`, `d67adee`, `c18d2a6`; 261 tests)*
+
+Strands 1–2 of `10-roadmap.md` §Visualizer. Strand 3 (the non-visual representation) is
+deliberately **not** in this work — visual first, by request.
+
+The intended job was to *draw* the tap-travel budget. It ended up changing the gate,
+because drawing the budget honestly is what made the gate's shape legible.
+
+### The probe came first
+
+Every design question here turned on what the hardware actually reports, so the first
+commit extended `mb-dev dump-frames` rather than guessing: `minorAxis`, `angle`, `zTotal`,
+and the surface in millimetres. What it settled (docs/04 §Per-OS table):
+
+- `SurfaceTouch.size` is `MTTouch.majorAxis` — the fitted contact ellipse's **major axis
+  in millimetres**. Not an area, not a pressure. The doc comment had said "contact area",
+  which was simply wrong.
+- The struct layout past `zTotal` is good: `minor ≤ major` always, `angle` quantized in
+  π/64 steps landing exactly on π/2, `z` in 1/8 steps.
+- The surface is **51.52 × 90.56 mm** (`MTDeviceGetSensorSurfaceDimensions` returns
+  ¹⁄₁₀₀ mm, so the "5152 × 9056" in docs/04 was never an abstract grid). Because the view
+  is aspect-locked to it, one `pointsPerMM` converts in every direction.
+- The centroid **drifts as the patch grows**, and reverses when it shrinks: `position` is
+  the patch centroid, so asymmetric growth translates it while the finger's skeleton is
+  still.
+
+### One accumulator, not three
+
+Per-contact travel/size accumulation existed **twice** — in the recognizer and in
+`ContactMetricsRecorder`, the latter "deliberately parallel" per its own header — and
+feeding the visualizer would have made a third. Unified into `ContactAccumulator`, which
+also owns the single tap-gate evaluation and `TapVerdict`. Net −63 lines, no behaviour
+change. What is drawn is now the same arithmetic that decides.
+
+### The gate was anisotropic, and the drawing is what proved it
+
+Travel was Euclidean in **normalized** space, and the sensor is portrait — so
+`maxTravel = 0.06` meant 3.09 mm side to side but 5.43 mm fore and aft. Nobody chose that
+1.76:1 bias. The ring was drawn as an ellipse at first, faithfully, *because that was the
+gate's true shape* — and both the picture and the data then said the same thing: on an
+angled still press the centroid drifted 1.60 mm in `x` and 1.45 mm in `y`, near-equal
+physically, and the gate scored `x` about twice as hard. Hands-on agreed: a fingertip
+rolls sideways at least as easily as it slides forward.
+
+Travel is now Euclidean in **millimetres** (`MouseSurface` in `TouchKit`, one definition
+shared by gate and picture), so the budget is a circle. Default converts the old one
+area-preservingly — `0.06 × √(51.52 × 90.56)` = **4.1 mm** — spending the same total
+allowance, 33% looser sideways and 25% tighter fore-aft. The angled press re-scores 58% →
+53% of budget, so `pressAndHold` promotion gains headroom rather than losing it. Radius
+settled by use; kept slightly loose on purpose, because the default is what someone with a
+shakier hand meets before they ever find the slider.
+
+### Two silent failures, headed off
+
+Both would have shipped quietly and been miserable to trace:
+
+- **The settings key was renamed**, not reinterpreted. A pre-1.1.3 file stores `maxTravel`
+  normalized; reading its `0.06` as millimetres leaves a 0.06 mm budget — *every* tap
+  rejected on travel, with a settings file that still looks perfectly reasonable. The old
+  key is read only to convert (`GestureConfig.init(from:)`), and four tests cover it,
+  including that the new key beats the legacy one so an encode/decode round-trip cannot
+  re-migrate.
+- **The `log-gestures` CSV column was renamed** `maxTravel` → `maxTravelMM`. The two
+  scales differ by ~68× and nothing else in the row distinguishes an old log from a new
+  one, so concatenating two sessions would have produced a plausible, wrong distribution.
+
+Every travel-carrying field now names its unit — `maxTravelMM`, `displacementMM`,
+`travelBudgetMM`, `budgetMM` — as does the `offsetMM` test helper, since a normalized
+literal in a fixture quietly means a different drift on each axis.
+
+### What the drawing had to learn from being looked at
+
+Three things only rendering caught:
+
+1. **Rings under the contact.** The budget is ~8 mm across and a fingertip patch is
+   ~11 × 8 mm — nearly the same size — so the annotation was buried in exactly the cases
+   worth reading. Rings now sit over the contact, and use `.primary`: an accent ring
+   vanishes into an accent-filled patch.
+2. **A high-water ring cannot teach a threshold.** It only ratchets, so it can never show
+   what the limit *feels* like. The drawn inner ring is live **displacement**; the verdict
+   rides on the high-water via the red latch. Both cross the boundary at the same instant,
+   since the high-water is set by that very value. A second faint watermark ring was
+   tried, rendered, judged clutter, and dropped.
+3. **The trip predicate was wrong.** It tested `verdict == .rejectedTravel`, but the
+   verdict names the *first* gate to fail in order — a contact that outran both the tap
+   window and the budget reports `.rejectedDuration`, so the ring would have kept growing
+   past the boundary in the long-drift case. It now tests the measurement directly.
+
+### A regression test that was worthless until it was checked
+
+Once a drag promotes, `promoteToHoldIfNeeded` returns at its `didBeginHold` guard and
+never consults travel again — so a finger sliding mid-drag, or a second finger landing,
+cannot drop it. Right behaviour, unpinned. The first attempt asserted on the gesture
+*sequence* and passed against a recognizer deliberately mutated to drop the drag mid-slide:
+a broken recognizer emits `holdBegan, holdEnded` too — the same list, at the wrong moment.
+The tests now drive every frame **but** the `.ended` one and assert the drag is still live
+and still tracked before the lift. Each was verified to fail under a mutation targeting its
+own rule, and to survive the other's.
+
+### Still open
+
+- **Strand 3**, the non-visual representation. Untouched.
+- **High-water vs current displacement**, narrowed: for a *tap* the two coincide in
+  practice (180 ms is too short to drift out and settle back), so the tap gate needs no
+  change. The gap only opens in `pressAndHold` promotion, which re-checks the ratcheting
+  value every frame — patch growth alone can disqualify a press that then settles still.
+  Wants a `log-gestures` session, not an argument.
+- **Duration calibration**, unrelated but noticed: four short contacts ran 0.150 / 0.180 /
+  0.255 / 0.300 s against `maxDuration` 0.18.
