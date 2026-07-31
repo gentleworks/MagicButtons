@@ -447,6 +447,84 @@ private func run(_ frames: [Frame], config: GestureConfig = GestureConfig()) -> 
         #expect(!out.contains(.holdBegan(zone: .left)))
     }
 
+    /// A single contact that stays **still** long enough to promote, then slides.
+    /// `held` can't express this: its drift is spread evenly across the whole hold, so
+    /// the contact is already moving before the threshold and never arms at all.
+    private func stillThenSlides(
+        at p: CGPoint, hold: TimeInterval, slideAfter: TimeInterval, slideMM: CGFloat,
+        others: [SurfaceTouch] = [], othersAfter: TimeInterval = .infinity
+    ) -> [Frame] {
+        func frame(_ t: TimeInterval, _ phase: TouchPhase) -> Frame {
+            let progress = min(1, max(0, (t - slideAfter) / max(hold - slideAfter, 0.001)))
+            return Frame(
+                touches: [SurfaceTouch(deviceID: device, id: 1,
+                                       position: offsetMM(p, dxMM: slideMM * progress),
+                                       phase: phase, timestamp: t, size: 0.3)]
+                    + (t >= othersAfter ? others : []),
+                physicalClickActive: false)
+        }
+        var frames = [frame(0, .began)]
+        var t = 0.02
+        while t < hold {
+            frames.append(frame(t, .moved))
+            t += 0.02
+        }
+        frames.append(frame(hold, .ended))
+        return frames
+    }
+
+    /// Drives every frame **but the last** (the `.ended`), so the drag is still in
+    /// flight, and hands back what fired plus the recognizer. Asserting on the final
+    /// gesture *sequence* is not enough here: a recognizer that wrongly dropped the drag
+    /// mid-slide would emit `holdBegan, holdEnded` too — the same list, at the wrong
+    /// moment. The question is whether the release waits for the lift, so the test has
+    /// to look before the lift. (Verified by mutation: a cancel-on-travel path in the
+    /// `.moved` branch passes a sequence-only assertion.)
+    private func stillHeldBeforeLift(_ frames: [Frame])
+        -> (fired: [ButtonGesture], recognizer: MouseGestureRecognizer) {
+        let recognizer = MouseGestureRecognizer(layout: ZoneLayout(), config: cfg)
+        var fired: [ButtonGesture] = []
+        recognizer.onGesture = { fired.append($0) }
+        for frame in frames.dropLast() {
+            recognizer.ingest(frame.touches, physicalClickActive: frame.physicalClickActive)
+        }
+        return (fired, recognizer)
+    }
+
+    /// The travel budget is an **arming** condition, not a live one: once a drag has
+    /// promoted, `promoteToHoldIfNeeded` returns at its `didBeginHold` guard and never
+    /// consults travel again. Dropping a drag mid-gesture because the finger slid would
+    /// be indefensible — nobody scrolls in the middle of a drag and wants the drag
+    /// cancelled for it — and the failure would be miserable to trace, so pin it.
+    @Test func aPromotedDragSurvivesTheFingerSlidingFarPastTheBudget() throws {
+        // Still until 0.25 s (promotes at holdThreshold 0.18), then slides 20 mm —
+        // nearly five times the budget — before lifting.
+        let frames = stillThenSlides(at: left, hold: 0.60, slideAfter: 0.25, slideMM: 20)
+        let (fired, recognizer) = stillHeldBeforeLift(frames)
+        // Mid-slide, well past the budget: the drag is still down and still tracked.
+        #expect(fired == [.holdBegan(zone: .left)])
+        let live = try #require(recognizer.liveContacts.first)
+        #expect(live.didBeginHold)
+        #expect(live.maxTravelMM > live.travelBudgetMM)
+        // And it releases on the lift, not before.
+        #expect(run(frames, config: cfg) == [.holdBegan(zone: .left), .holdEnded(zone: .left)])
+    }
+
+    /// Same guard, same reasoning for the single-contact rule: resting a second finger
+    /// part-way through a drag must not drop what you are dragging.
+    @Test func aPromotedDragSurvivesASecondFingerLandingMidDrag() throws {
+        // `.moved` with no `.began`, so it is skipped as untracked but still counts
+        // toward `touches.count` — the same trick `twoFingerHoldDoesNotDrag` uses.
+        let other = SurfaceTouch(deviceID: device, id: 9, position: CGPoint(x: 0.9, y: 0.5),
+                                 phase: .moved, timestamp: 0, size: 0.3)
+        let frames = stillThenSlides(at: left, hold: 0.60, slideAfter: 0.25, slideMM: 0,
+                                     others: [other], othersAfter: 0.25)
+        let (fired, recognizer) = stillHeldBeforeLift(frames)
+        #expect(fired == [.holdBegan(zone: .left)])
+        #expect(recognizer.liveContacts.first?.didBeginHold == true)
+        #expect(run(frames, config: cfg) == [.holdBegan(zone: .left), .holdEnded(zone: .left)])
+    }
+
     @Test func doubleClickStillWorksInPressAndHold() {
         // Two quick taps in-gap → single then double, unaffected by the drag style.
         let out = run(tap(at: left, t0: 0) + tap(at: left, t0: 0.20), config: cfg)
