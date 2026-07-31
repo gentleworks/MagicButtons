@@ -78,10 +78,22 @@ place without building them now.
      legible: hands-on, drift proved not to favour fore-aft the way the gate assumed, and
      the logged still press had already shown near-equal physical drift being scored ~2×
      on `x`. Travel is now Euclidean in **millimetres** and the ring is a circle
-     (docs/04 §Why travel is measured in millimetres). The two remaining travel
-     questions are separate and still open: whether the gate should judge the
-     **high-water** or the **displacement at lift** (a finger that rolls and settles is
-     rejected today), and whether 4.1 mm is the right radius — both want a
+     (docs/04 §Why travel is measured in millimetres).
+
+     **Radius: settled at 4.1 mm**, hands-on 2026-07-30 — possibly a touch loose for a
+     steady hand, and kept that way **deliberately**: the threshold should have room for
+     someone whose hands shake, and it is a slider for anyone who wants it tighter.
+     Revisit from use, not from theory.
+
+     **Remaining travel question, narrowed:** high-water vs current displacement. For a
+     *tap* the two coincide in practice — 180 ms is not long enough to drift past the
+     ring and settle back — so the tap gate needs no change. The gap only opens in
+     **`pressAndHold` promotion** (`MouseGestureRecognizer.swift:248`), which re-checks
+     the ratcheting high-water every frame: the contact patch grows under a firm press,
+     dragging the centroid out, and *reverses* when the patch shrinks (docs/04). So a
+     press can spend its budget on patch growth alone and stay permanently disqualified
+     from becoming a drag even after it settles still. Judging that guard on current
+     displacement instead would let it promote once settled. Not decided; wants a
      `log-gestures` session rather than an argument.
   3. **The visualizer for users who can't see it.** The code is modest (~40–60 lines:
      the surface as one accessibility element with a live value, plus announcements) but
