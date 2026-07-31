@@ -52,10 +52,17 @@ place without building them now.
   + device-scope hazards, two-tier safety story) lives in **`05-event-output.md`
   §Suppress physical clicks**. Its de-confliction prerequisite ships separately as
   **Feature B** — **`14-post-v1.md` §Click/drag de-confliction**, queued next.
-- **Visualizer: non-visual + threshold visibility** — split out of the accessibility pass
+- **Visualizer: non-visual + threshold visibility** — **all three strands DONE + HW-verified**
+  (1–2 on 2026-07-30, PR #11; 3 on 2026-07-31, PR #12). Split out of the accessibility pass
   2026-07-30, which deliberately stopped at the UI's labels and left the visualizer's
-  *picture* alone. Three strands, in dependency order:
-  1. **Feed the visualizer from the interpreting machinery.** Per-contact accumulation
+  *picture* alone. The record of what was built and learned is `docs/14-post-v1.md` — two
+  entries, "true-size contacts, the travel budget, and a circular gate" and "the spoken
+  readout"; the design is `docs/06`. Kept here in full because the strands below are what
+  the work was *estimated* as, and both estimates missed in instructive ways: strand 2 set
+  out to draw the gate and ended up correcting it, and strand 3's named risk (announcement
+  flooding) turned out less dangerous than the one nobody wrote down (announcement *scope*).
+  **One question survives all three — high-water vs current displacement, under strand 2.**
+  1. **Feed the visualizer from the interpreting machinery. — DONE.** Per-contact accumulation
      (distance from the `.began` origin) is currently implemented **twice** —
      `MouseGestureRecognizer.swift:163` and `ContactMetrics.swift:219`, the latter
      "deliberately parallel" per its own header. **Decision: unify to one accumulator**
@@ -67,7 +74,12 @@ place without building them now.
      `AppShell/AppModel` translates, exactly as `ButtonGesture` →
      `VisualizerModel.RecognizedGesture` already does at `AppModel.swift:237-245`.
      Costs a mirror of `TapVerdict` on the visualizer side; that's the boundary's price.
-  2. **Draw the tap-travel budget** around the contact origin, so you can see how close a
+
+     *As built:* the duplication above is **gone** — `ContactAccumulator` is the one
+     accumulator, and the present tense in this paragraph describes the state before the
+     work, not now. The boundary held as planned: `Visualizer` still depends on `TouchKit`
+     alone, and the mirrored verdict was paid for.
+  2. **Draw the tap-travel budget — DONE**, and it changed the gate. Around the contact origin, so you can see how close a
      tap came to being rejected as a drag, and *which* gate it tripped (`TapVerdict`
      already answers that). A separate "just landed" cue was considered and **dropped as
      redundant** with this (and `holdBegan` already flashes its own badge).
