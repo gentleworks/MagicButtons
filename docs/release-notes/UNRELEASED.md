@@ -36,3 +36,13 @@ announces MagicButtons by name — along with what needs attention when somethin
 the visualizer, the gesture badge now names the zone a gesture fired in instead of relying
 on colour alone, and its text is easier to read; contact dots have a clearer outline. If you
 use Reduce Motion, the badge fades in rather than scaling up.
+
+The visualizer now speaks, so you can set your zones up without seeing it. Rest a finger on
+the mouse and it tells you which zone you're in; tap, double-tap or hold and it tells you
+what registered and where — which is the part you want while you're moving the Advanced
+sliders and your VoiceOver cursor is on the slider, not the picture. Brief taps don't
+announce where they landed, only what they were, so trying a few in a row stays quick to
+listen to, and lifting your finger says nothing at all. You'll only hear it while the
+visualizer or Settings window is the one you're in front of — using your mouse anywhere
+else stays silent. Landing on the picture itself reads out the current zone and how many
+fingers are down.

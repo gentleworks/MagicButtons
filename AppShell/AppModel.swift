@@ -225,6 +225,10 @@ final class AppModel {
         // attach/detach (delivered on the main run loop).
         coordinator.onFrame = { [weak self] frame in
             guard let self else { return }
+            // One reading of the clock for the whole frame, shared by the two things that
+            // need it — the visualizer's spoken-readout dwell and the health monitor — so
+            // they can't disagree about when this frame arrived.
+            let now = ProcessInfo.processInfo.systemUptime
             // Read after `ingest` — the coordinator's tee fires there — so these are this
             // frame's measurements, taken from the recognizer that judges them. Mapped to
             // the visualizer's own vocabulary so that package stays free of GestureEngine.
@@ -233,8 +237,8 @@ final class AppModel {
                     id: $0.id, origin: $0.origin, maxTravelMM: $0.maxTravelMM,
                     displacementMM: $0.displacementMM, budgetMM: $0.travelBudgetMM,
                     verdict: Self.budgetVerdict($0.verdictSoFar))
-            })
-            self.streamHealth.noteFrame(at: ProcessInfo.processInfo.systemUptime)
+            }, at: now)
+            self.streamHealth.noteFrame(at: now)
             // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one
             // check per frame — the other two streams aren't even installed.
             self.diagnostics.log?.contacts(frame)

@@ -95,14 +95,22 @@ place without building them now.
      from becoming a drag even after it settles still. Judging that guard on current
      displacement instead would let it promote once settled. Not decided; wants a
      `log-gestures` session rather than an argument.
-  3. **The visualizer for users who can't see it.** The code is modest (~40–60 lines:
-     the surface as one accessibility element with a live value, plus announcements) but
-     the *design* is the cost — continuous finger movement floods
-     `AccessibilityNotification.Announcement`, so it needs the "value actually changed AND
-     ≥0.3 s since the last" gate, and someone has to decide whether zone entry/exit is the
-     signal worth speaking. Needs VoiceOver-on iteration on hardware. The two-line badge
-     shipped in the accessibility pass gives this a head start: the zone is text now, not
-     only a tint.
+  3. **The visualizer for users who can't see it — DONE** (docs/06 §The spoken readout,
+     docs/14). The estimate held for the code and was wrong about which design problem
+     bites. The predicted one — flooding `AccessibilityNotification.Announcement` — is
+     real, but the "value changed AND ≥0.3 s since the last" gate proposed for it
+     *causes* a worse bug: a landing finger changes the zone ~180 ms before the tap
+     registers, so that gate speaks the zone and suppresses the **gesture**. Zone and
+     gesture are separated by intent instead (gestures always; zone only after a 0.35 s
+     dwell a tap can't reach), and the open question resolved as "both, but not equally".
+
+     The cost that wasn't estimated: **scope**. The touch stream is live for as long as
+     the app runs, so announcing from the model would have named a zone every time the
+     user brushed the mouse, in every app, all day. Posting lives in the view, gated on
+     VoiceOver running and the window being frontmost.
+
+     **Still wants VoiceOver-on hardware iteration** — the dwell (0.35 s) and the
+     announcement wording are judged by ear, not by test.
 
   Note phase is **not** a travel signal and never was: raw state 3 → `.began` fires for a
   single frame (`PhaseMapping.swift`, pinned from bring-up as `3 → 4 … 4 → 5 → 6 → 7`),

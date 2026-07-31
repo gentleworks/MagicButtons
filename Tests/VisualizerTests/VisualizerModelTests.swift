@@ -106,6 +106,139 @@ import TouchKit
     }
 }
 
+// MARK: Spoken readout (strand 3 — the visualizer for users who can't see it)
+
+/// The gate decides *when* to speak; `VisualizerView` decides the words and whether
+/// anyone is listening. Driven through the model rather than the gate directly,
+/// because the frame → active-zone → announcement path is the thing that has to hold.
+@MainActor
+@Suite struct VisualizerAnnouncementTests {
+    private func touch(_ x: CGFloat, phase: TouchPhase = .moved) -> SurfaceTouch {
+        SurfaceTouch(deviceID: MouseDeviceID(raw: 1), id: 1,
+                     position: CGPoint(x: x, y: 0.5), phase: phase, timestamp: 0, size: 9)
+    }
+
+    /// Past the dwell with room to spare, so a test never sits on the threshold.
+    private let settled = AnnouncementGate.dwell + 0.05
+
+    @Test func startsWithNothingToSay() {
+        #expect(VisualizerModel().zoneAnnouncement == nil)
+    }
+
+    /// The point of the dwell. A tap's contact is gone inside `maxDuration` (180 ms by
+    /// default), well short of it, so the tap speaks only its gesture — landing never
+    /// narrates itself.
+    @Test func aTapIsTooBriefToSpeakItsZone() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.update([touch(0.10)], at: 0.18)
+        model.update([], at: 0.19)
+        #expect(model.zoneAnnouncement == nil)
+    }
+
+    /// The other half: a finger that stays put is someone feeling for the boundaries,
+    /// which is exactly what the picture is for.
+    @Test func aRestingFingerSpeaksItsZoneOnceSettled() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        #expect(model.zoneAnnouncement == nil)      // still dwelling
+        model.update([touch(0.10)], at: settled)
+        #expect(model.zoneAnnouncement?.zone == .left)
+    }
+
+    @Test func aSettledZoneIsNotRepeatedFrameAfterFrame() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.update([touch(0.10)], at: settled)
+        let spoken = model.zoneAnnouncement?.id
+        model.update([touch(0.10)], at: settled + 1)
+        model.update([touch(0.10)], at: settled + 2)
+        #expect(model.zoneAnnouncement?.id == spoken)
+    }
+
+    /// Crossing a boundary restarts the clock, so sliding across the middle band
+    /// doesn't announce it in passing — only settling in it does.
+    @Test func crossingIntoANewZoneRestartsTheDwell() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.update([touch(0.10)], at: settled)
+        #expect(model.zoneAnnouncement?.zone == .left)
+
+        model.update([touch(0.50)], at: settled + 0.1)         // into the middle
+        model.update([touch(0.50)], at: settled + 0.2)         // still short of the dwell
+        #expect(model.zoneAnnouncement?.zone == .left)
+        model.update([touch(0.50)], at: settled + 0.1 + settled)
+        #expect(model.zoneAnnouncement?.zone == .middle)
+    }
+
+    /// Lifting says nothing — the user knows they lifted — but it does re-arm, so the
+    /// next contact names its zone instead of being taken for a repeat of the last.
+    @Test func liftingIsSilentAndRearmsTheNextContact() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.update([touch(0.10)], at: settled)
+        let first = model.zoneAnnouncement?.id
+        #expect(first != nil)
+
+        model.update([], at: settled + 0.1)
+        #expect(model.zoneAnnouncement?.id == first)            // silence, not a new event
+
+        model.update([touch(0.10)], at: settled + 1)            // same zone, new contact
+        model.update([touch(0.10)], at: settled + 1 + settled)
+        #expect(model.zoneAnnouncement?.zone == .left)
+        #expect(model.zoneAnnouncement?.id != first)            // and it does speak again
+    }
+
+    /// A press-and-hold registers at `holdThreshold` (180 ms), before the dwell. The
+    /// badge names its own zone and the view speaks it, so the dwell must not follow up
+    /// with a bare "left" a fraction of a second later.
+    @Test func aGestureSuppressesTheZoneItAlreadyNamed() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.register(.holdBegan(.left), at: 0.18)
+        model.update([touch(0.10)], at: settled)
+        model.update([touch(0.10)], at: settled + 1)
+        #expect(model.zoneAnnouncement == nil)
+    }
+
+    /// …but only for the zone it named. Move on from it while still holding and that
+    /// new zone is news again.
+    @Test func aGestureDoesNotSilenceALaterZone() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.register(.holdBegan(.left), at: 0.18)
+        model.update([touch(0.90)], at: 0.5)
+        model.update([touch(0.90)], at: 0.5 + settled)
+        #expect(model.zoneAnnouncement?.zone == .right)
+    }
+
+    /// The one case `minimumGap` actually catches, and the reason it isn't dead code:
+    /// two *zone* announcements can never crowd each other, since changing zone restarts
+    /// the dwell. A zone crowding a **gesture** takes two fingers — one resting in the
+    /// middle while another taps left. The resting finger's zone is deferred, not
+    /// dropped, so it still arrives once the gap is clear.
+    @Test func aZoneWaitsItsTurnBehindAGestureInAnotherZone() {
+        let model = VisualizerModel()
+        model.update([touch(0.50)], at: 0)                  // a finger resting in the middle
+        model.register(.click(.left, count: 1), at: 0.10)   // another one taps left
+
+        model.update([touch(0.50)], at: settled)            // dwell is up, but the gap isn't
+        #expect(model.zoneAnnouncement == nil)
+        model.update([touch(0.50)], at: 0.10 + AnnouncementGate.minimumGap + 0.01)
+        #expect(model.zoneAnnouncement?.zone == .middle)
+    }
+
+    /// `holdEnded` clears the badge and speaks nothing, so it has nothing to report to
+    /// the gate — and must not be mistaken for a gesture that named a zone.
+    @Test func holdEndedDoesNotCountAsSomethingSpoken() {
+        let model = VisualizerModel()
+        model.update([touch(0.10)], at: 0)
+        model.register(.holdEnded(.left), at: 0.18)
+        model.update([touch(0.10)], at: settled)
+        #expect(model.zoneAnnouncement?.zone == .left)
+    }
+}
+
 @MainActor
 @Suite struct VisualizerBudgetTests {
     private func budget(

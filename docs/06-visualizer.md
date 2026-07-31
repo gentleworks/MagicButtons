@@ -99,7 +99,49 @@ middle button" from a guess into a direct-manipulation setting.
 - No dependency on the recognizer or emitter — strictly a view over the stream. The
   travel rings do **not** breach this: the numbers arrive as the visualizer's own
   value type, translated at the composition layer.
-- **Not yet non-visual.** Everything above is sight-only; the surface has no
-  accessibility representation. Tracked as strand 3 in docs/10 §Visualizer, and it is
-  the reason the picture is deliberately readable without colour alone (the badge
-  names its zone, the tripped budget changes dash *and* weight, not just hue).
+- **Not a spoken transcript of the stream.** The picture has a non-visual form (below),
+  but it speaks two things, not everything: which zone a settled finger is in,
+  and which gesture registered. Position, contact size and the travel budget are drawn
+  only. Reading a 90 Hz stream aloud is not an accessible interface, it is noise.
+
+## The spoken readout
+
+The picture has a non-visual form, built on the same feed (docs/10 §Visualizer, strand 3).
+
+The whole view is **one accessibility element**, not a dozen. Left alone VoiceOver finds
+the two caption strings and — for 900 ms at a time — the flash badge, so the picture reads
+as fragments that appear and vanish under the cursor. Folded together with
+`.accessibilityElement(children: .ignore)` it is what it looks like: one live readout,
+labelled "Mouse surface", valued with the zone and the contact count.
+
+That covers reading it *on demand*. But while calibrating, VoiceOver focus is on the
+slider being dragged, not on the picture — so the value alone is inert, and the readout
+also **announces**. Two signals compete for one voice, and the obvious gate ("the value
+changed AND ≥0.3 s since the last", the WWDC pattern) gets them backwards: a finger
+landing changes the zone immediately and the tap it becomes registers ~180 ms later, so
+the zone speaks first and the *gesture* is the one suppressed. `AnnouncementGate`
+separates them by intent instead of by rate:
+
+- **Gestures always speak** — discrete, already rare, posted at `.high` priority so
+  VoiceOver's queue can't drop them.
+- **A zone speaks only once a finger has settled in it** for 0.35 s, comfortably past the
+  180 ms defaults of both `maxDuration` and `holdThreshold`. A tap is long gone by then,
+  so it never narrates its own landing; a finger resting or sliding does cross it, which
+  is the exploring-the-surface case the picture exists for.
+- **Lifting is silent** — the user knows they lifted — but it re-arms, so the next contact
+  names its zone rather than being taken for a repeat.
+
+The gate is pure and takes its clock as a parameter, so the dwell is tested without
+waiting in real time (`VisualizerAnnouncementTests`).
+
+**Deciding there is something to say lives in the model; deciding whether anyone is
+listening lives in the view**, and the split is not cosmetic. The touch stream runs for as
+long as the app does, so a model that announced on its own would name a zone every time
+the user brushed their mouse — in every app, all day. `VisualizerView` posts only when
+VoiceOver is running *and* its own window is frontmost (`controlActiveState`); a view
+that isn't on screen never gets the chance at all.
+
+This is also why the picture stays readable without colour alone (the badge names its
+zone, the tripped budget changes dash *and* weight, not just hue): the spoken form covers
+no sight at all, and the drawn form has to cover the far commoner case of colour vision
+that differs.

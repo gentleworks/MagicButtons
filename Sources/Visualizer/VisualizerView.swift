@@ -18,6 +18,12 @@ public struct VisualizerView: View {
     /// signal — so it cross-fades instead for anyone who's asked for less motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The two halves of "is anyone listening", checked before every announcement.
+    /// See `announce(_:interrupting:)` for why speaking unconditionally would be a
+    /// serious misbehavior rather than merely a chatty one.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.controlActiveState) private var windowState
+
     public init(model: VisualizerModel) {
         self.model = model
     }
@@ -31,6 +37,70 @@ public struct VisualizerView: View {
         // A low floor so the view embeds cleanly at small sizes (the Advanced-pane
         // mini-map); the standalone window sets its own larger size and fills it.
         .frame(minWidth: 120, minHeight: 140)
+        // One stop, not three. Left to itself VoiceOver finds the two caption strings
+        // and — for 900 ms at a time — the flash badge, so the picture reads as a
+        // handful of fragments that appear and vanish under the cursor. Folded into a
+        // single element it is what it looks like: one live readout.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Mouse surface", bundle: #bundle,
+                                 comment: "VoiceOver name for the visualizer's picture of the mouse."))
+        .accessibilityValue(spokenState)
+        .onChange(of: model.zoneAnnouncement?.id) {
+            guard let zone = model.zoneAnnouncement?.zone else { return }
+            announce(title(zone))
+        }
+        .onChange(of: model.lastFlash?.id) {
+            // Nil means the badge aged out after 900 ms, which is not an event.
+            guard let flash = model.lastFlash else { return }
+            announce(phrase(gestureName(flash.kind), title(flash.zone)), interrupting: true)
+        }
+    }
+
+    // MARK: Spoken readout
+
+    /// What the picture says for someone who can't see it: the same two facts the
+    /// caption carries. This is the on-demand half — read when VoiceOver lands on the
+    /// element — and `announce` below is the half that reaches someone whose focus is
+    /// on the slider they're tuning, which is where it will usually be.
+    private var spokenState: String {
+        guard let zone = model.activeZone else {
+            return String(localized: "No contact", bundle: #bundle,
+                          comment: "Visualizer accessibility value when no finger is on the mouse.")
+        }
+        // Reuses the caption's counted string, so the plural variations already in the
+        // String Catalog carry over and no second set can drift from them.
+        let contacts = String(localized: "\(model.touches.count) contacts", bundle: #bundle,
+                              comment: "Number of fingers currently on the mouse surface.")
+        return phrase(title(zone), contacts)
+    }
+
+    /// Two facts spoken as one phrase. A single key serves both the element's value
+    /// and the gesture announcement — same shape, same separator — so a translator
+    /// sets the punctuation once and both follow.
+    private func phrase(_ lead: String, _ detail: String) -> String {
+        String(localized: "\(lead), \(detail)", bundle: #bundle,
+               comment: "Two-part spoken phrase — a gesture or zone name, then a detail. For example 'Tap, middle' or 'middle, 2 contacts'.")
+    }
+
+    /// Speak, but only when someone is there to hear it. The touch stream runs for as
+    /// long as the app does, so an ungated announcement would name a zone every time
+    /// the user brushed their mouse — in every app, all day, whatever they were doing.
+    /// Two conditions narrow it to the case the picture is for: VoiceOver on, and this
+    /// view's own window in front. A view that isn't on screen never gets here at all,
+    /// which is the third and the reason this lives in the view and not the model.
+    private func announce(_ text: String, interrupting: Bool = false) {
+        guard voiceOverEnabled, windowState != .inactive else { return }
+        guard interrupting else {
+            AccessibilityNotification.Announcement(text).post()
+            return
+        }
+        // A gesture is the message worth hearing, and it lands mid-stream while a zone
+        // may still be queued ahead of it. `.high` is the documented way to say so —
+        // set on the string, since there is no view modifier for it — and it keeps the
+        // announcement from being dropped by VoiceOver's queue.
+        var message = AttributedString(text)
+        message.accessibilitySpeechAnnouncementPriority = .high
+        AccessibilityNotification.Announcement(message).post()
     }
 
     private var surface: some View {
@@ -63,7 +133,7 @@ public struct VisualizerView: View {
     private var flashBadge: some View {
         if let flash = model.lastFlash {
             VStack(spacing: 0) {
-                badgeLabel(flash.kind)
+                Text(gestureName(flash.kind))
                 // Which zone fired, in words. The capsule's tint was previously the only
                 // thing separating left/middle/right, and green-vs-orange is the commonest
                 // colour-blind confusion pair — precisely the middle/right distinction this
@@ -90,17 +160,21 @@ public struct VisualizerView: View {
 
     /// One and two taps get their own names because that's how people say them; beyond
     /// that the count carries the meaning, so a single counted string covers the tail.
-    private func badgeLabel(_ kind: VisualizerModel.GestureFlash.Kind) -> Text {
+    ///
+    /// A `String` rather than a `Text` so the badge and the spoken announcement read
+    /// from one place — the same words, whichever way you're receiving them. The keys
+    /// are unchanged, so the String Catalog and its translations carry over as they are.
+    private func gestureName(_ kind: VisualizerModel.GestureFlash.Kind) -> String {
         switch kind {
         case .hold:
-            return Text("Hold", bundle: #bundle, comment: "Badge shown when a press-and-hold registers.")
+            return String(localized: "Hold", bundle: #bundle, comment: "Badge shown when a press-and-hold registers.")
         case .tap(1):
-            return Text("Tap", bundle: #bundle, comment: "Badge shown when a single tap registers.")
+            return String(localized: "Tap", bundle: #bundle, comment: "Badge shown when a single tap registers.")
         case .tap(2):
-            return Text("Double-tap", bundle: #bundle, comment: "Badge shown when a double tap registers.")
+            return String(localized: "Double-tap", bundle: #bundle, comment: "Badge shown when a double tap registers.")
         case let .tap(count):
-            return Text("\(count)× tap", bundle: #bundle,
-                        comment: "Badge for three or more rapid taps, e.g. '3× tap'.")
+            return String(localized: "\(count)× tap", bundle: #bundle,
+                          comment: "Badge for three or more rapid taps, e.g. '3× tap'.")
         }
     }
 

@@ -1,6 +1,17 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@, %@" : {
+      "comment" : "Two-part spoken phrase — a gesture or zone name, then a detail. For example 'Tap, middle' or 'middle, 2 contacts'.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%lld contacts" : {
       "comment" : "Number of fingers currently on the mouse surface.",
       "localizations" : {
@@ -104,6 +115,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "centro"
+          }
+        }
+      }
+    },
+    "Mouse surface" : {
+      "comment" : "VoiceOver name for the visualizer's picture of the mouse.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Superficie del ratón"
+          }
+        }
+      }
+    },
+    "No contact" : {
+      "comment" : "Visualizer accessibility value when no finger is on the mouse.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin contacto"
           }
         }
       }

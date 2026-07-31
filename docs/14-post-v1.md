@@ -884,7 +884,7 @@ own rule, and to survive the other's.
 
 ### Still open
 
-- **Strand 3**, the non-visual representation. Untouched.
+- **Strand 3**, the non-visual representation. *(Done next — see below.)*
 - **High-water vs current displacement**, narrowed: for a *tap* the two coincide in
   practice (180 ms is too short to drift out and settle back), so the tap gate needs no
   change. The gap only opens in `pressAndHold` promotion, which re-checks the ratcheting
@@ -892,3 +892,88 @@ own rule, and to survive the other's.
   Wants a `log-gestures` session, not an argument.
 - **Duration calibration**, unrelated but noticed: four short contacts ran 0.150 / 0.180 /
   0.255 / 0.300 s against `maxDuration` 0.18.
+
+## Visualizer: the spoken readout ✅ *(strand 3; code + tests done; **HW VoiceOver verification outstanding**; 270 tests)*
+
+Strand 3 of `10-roadmap.md` §Visualizer — the picture, for someone who can't see it. The
+line estimate held (~60 lines of view + model). What it got wrong was *which* design
+problem bites, and it missed one entirely.
+
+### The predicted problem was real, and the predicted fix causes a worse bug
+
+The roadmap called it: continuous finger movement floods
+`AccessibilityNotification.Announcement`, so gate on "the value actually changed AND
+≥0.3 s since the last" — the WWDC 2026-220 pattern, and correct advice for the case it was
+given for (a single value changing under a passthrough drag).
+
+Here there are **two** signals sharing one voice, and that gate quietly ranks them wrong.
+A finger landing changes the active zone *immediately*; the tap it turns out to be
+registers ~180 ms later. Rate-limit them together and the zone wins the race and the
+**gesture** — the message actually worth hearing, the answer to "did my tap register?" —
+is the one the limiter drops. The failure is silent and would read as flakiness.
+
+So `AnnouncementGate` separates them by intent rather than by rate:
+
+- Gestures always speak, at `.high` priority so VoiceOver's queue can't drop them.
+- A zone speaks only after a finger has **settled** in it for 0.35 s.
+- Lifting is silent, but re-arms, so the next contact names its zone.
+
+The dwell does the discriminating that a rate limit can't: 0.35 s sits comfortably past
+the 180 ms defaults of *both* gesture thresholds it has to clear (`maxDuration`,
+`holdThreshold`), so a tap or a hold is long resolved before it fires and never narrates
+its own landing — while a finger resting or sliding does cross it, which is exactly the
+feeling-for-the-boundaries case the picture exists to serve. Two thresholds the user can
+drag, one constant that has to stay clear of both: raise either slider past 0.35 s and you
+hear the zone as well as the gesture. Wordier, not wrong, and the gesture still speaks.
+
+`noteGestureSpoken(in:at:)` closes the other half: a press-and-hold fires at 180 ms and the
+badge names its own zone, so without it the dwell would follow up with a bare "left" a
+fraction of a second later.
+
+### The cost nobody estimated: scope
+
+The roadmap costed the announcement *rate*. The thing that would actually have made this
+unshippable is **where it announces from**.
+
+The touch stream is live for as long as the app runs — that is the whole point of the app.
+An announcement posted from `VisualizerModel`, which is where the state lives and where it
+looks like it belongs, would have named a zone every time the user brushed their mouse: in
+every app, all day, whatever they were doing. Not a chatty feature — a broken Mac.
+
+So the split is deliberate and worth keeping: **the model decides there is something to
+say; the view decides whether anyone is listening.** `VisualizerView` posts only when
+VoiceOver is running *and* its own window is frontmost (`controlActiveState`), and a view
+that isn't on screen never gets the chance at all. The model's gate advances either way,
+which means state can be marked "spoken" that nobody heard — accepted deliberately: the
+alternative is a burst of backlog the moment the window comes forward.
+
+### One element, not a dozen
+
+Left to itself VoiceOver finds three things in the picture: two caption strings, and — for
+900 ms at a time — the flash badge, which appears and vanishes under the cursor. That is
+worse than nothing to navigate. `.accessibilityElement(children: .ignore)` on the whole
+view makes it one stop, labelled "Mouse surface", valued with zone and contact count.
+
+`badgeLabel` became `gestureName` and returns `String` instead of `Text`, so the badge and
+the announcement read the same words from one place. The String Catalog keys are
+unchanged, so the Spanish translations carried over untouched — verified against the
+compiler's own `.stringsdata` extraction rather than by eye, since a hand-authored catalog
+entry whose key doesn't match the generated one fails silently into an English fallback.
+Three keys are new (`Mouse surface`, `No contact`, `%@, %@`); the value reuses the
+caption's existing `%lld contacts`, plural variations and all, so the two can't drift.
+
+### Tests
+
+Nine, driven through the model rather than the gate directly, since the frame →
+active-zone → announcement path is the thing that has to hold. The gate takes its clock as
+a parameter (the `StreamHealthMonitor` idiom), so a 0.35 s dwell is tested without waiting
+0.35 s. The two that carry the design: `aTapIsTooBriefToSpeakItsZone` and
+`aGestureSuppressesTheZoneItAlreadyNamed` — each pins one half of the ranking above, and
+either failing means the readout has gone back to narrating taps.
+
+### Still open
+
+- **Hardware VoiceOver iteration.** The dwell and the wording are judged by ear; nothing
+  here has been heard yet. `AnnouncementGate.dwell` is the one number to turn.
+- **`controlActiveState` is untested** — it needs a real window, so it is verified by use,
+  not by suite.

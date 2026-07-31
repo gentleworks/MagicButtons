@@ -97,6 +97,27 @@ public final class VisualizerModel {
     @ObservationIgnored private var flashCounter = 0
     @ObservationIgnored private var flashClearTask: Task<Void, Never>?
 
+    /// A zone the non-visual readout is due to speak, in the model's usual semantic
+    /// form — the words are chosen in `VisualizerView`, like every other string here.
+    /// `id` advances per event so the view re-posts when the same zone comes round
+    /// again, the same reason `GestureFlash` carries one.
+    public struct ZoneAnnouncement: Identifiable, Equatable, Sendable {
+        public let id: Int
+        public let zone: MouseZone
+    }
+
+    /// The zone the readout should speak, or `nil` while nothing is due. Never
+    /// cleared on a timer — nothing draws it, so the view keys off `id` instead.
+    ///
+    /// Deciding there is something to *say* happens here; deciding whether anyone is
+    /// *listening* is the view's call, deliberately. A model that spoke on its own
+    /// would name a zone every time the user brushed their mouse — in every app, all
+    /// day — because the touch stream runs for as long as the app does.
+    public private(set) var zoneAnnouncement: ZoneAnnouncement?
+
+    @ObservationIgnored private var announcements = AnnouncementGate()
+    @ObservationIgnored private var announcementCounter = 0
+
     /// Zone boundaries, shared with the recognizer. Assigning re-points the
     /// hysteresis mapper, so a live calibration edit is reflected immediately.
     public var layout: ZoneLayout {
@@ -117,7 +138,12 @@ public final class VisualizerModel {
     /// `budgets` defaults empty so a source with no recognizer behind it — the
     /// `mb-dev visualize` harness, SwiftUI previews — still drives the picture, just
     /// without the travel rings.
-    public func update(_ frame: [SurfaceTouch], budgets: [ContactBudget] = []) {
+    ///
+    /// `now` feeds the spoken readout's dwell, injected the way `StreamHealthMonitor`
+    /// takes its clock so the gate is testable without waiting in real time. Defaulted
+    /// rather than required, because the harness and previews shouldn't have to care.
+    public func update(_ frame: [SurfaceTouch], budgets: [ContactBudget] = [],
+                       at now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         touches = frame
         self.budgets = budgets
         if let primary = frame.first(where: { $0.phase != .ended }) {
@@ -126,12 +152,17 @@ public final class VisualizerModel {
             mapper.reset()
             activeZone = nil
         }
+        if let zone = announcements.zoneToSpeak(activeZone, at: now) {
+            announcementCounter += 1
+            zoneAnnouncement = ZoneAnnouncement(id: announcementCounter, zone: zone)
+        }
     }
 
     /// Flash a recognized gesture (call on the main actor). Shows a badge that
     /// auto-clears shortly after, so a stream of taps reads as a series of flashes.
     /// A `holdEnded` clears any lingering badge rather than showing one.
-    public func register(_ gesture: RecognizedGesture) {
+    public func register(_ gesture: RecognizedGesture,
+                         at now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         flashClearTask?.cancel()
         flashCounter += 1
 
@@ -147,6 +178,11 @@ public final class VisualizerModel {
             return
         }
         lastFlash = GestureFlash(id: flashCounter, zone: zone, kind: kind)
+        // The badge names its zone and the view speaks it, so tell the gate: a
+        // press-and-hold shouldn't say "Hold, left" and then plain "left" once the
+        // dwell elapses. `holdEnded` returns above — it clears the badge and says
+        // nothing, so it has nothing to report here.
+        announcements.noteGestureSpoken(in: zone, at: now)
 
         let shownID = flashCounter
         flashClearTask = Task { @MainActor [weak self] in
