@@ -62,6 +62,17 @@ public struct ContactAccumulator: Sendable, Equatable {
     /// Elapsed as of the last observed frame.
     public var duration: TimeInterval { lastTime - startTime }
 
+    /// How far the contact is from its origin **right now** — unlike `maxTravel`, this
+    /// falls again when the finger comes back. Nothing is judged on it; it exists so a
+    /// display can show where the finger is against the threshold, which a ratcheting
+    /// high-water mark cannot. The two cross the budget at the same instant (the
+    /// high-water is set *by* this value), and only diverge afterwards.
+    public var displacement: CGFloat {
+        let dx = last.x - origin.x
+        let dy = last.y - origin.y
+        return (dx * dx + dy * dy).squareRoot()
+    }
+
     /// This contact's verdict as of `endTime`.
     public func verdict(at endTime: TimeInterval, against config: GestureConfig) -> TapVerdict {
         Self.verdict(duration: endTime - startTime, maxTravel: maxTravel, maxSize: maxSize,

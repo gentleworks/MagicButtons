@@ -607,6 +607,30 @@ private func stillDown(
         #expect(live.travelBudget == 0.02)
     }
 
+    /// The pair the drawing depends on: `maxTravel` ratchets and is what the gate
+    /// judges, while `displacement` falls again when the finger comes back. A visualizer
+    /// that showed only the high-water could never show what a threshold feels like.
+    @Test func displacementFallsBackWhileMaxTravelHolds() throws {
+        var frames = stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+        frames.append(Frame(
+            touches: [SurfaceTouch(deviceID: device, id: 1, position: CGPoint(x: 0.51, y: 0.5),
+                                   phase: .moved, timestamp: 0.1, size: 0.3)],
+            physicalClickActive: false))
+        let live = try #require(recognizerAfter(frames).liveContacts.first)
+        #expect(abs(live.maxTravel - 0.05) < 1e-9)      // furthest ever reached
+        #expect(abs(live.displacement - 0.01) < 1e-9)   // where it is now
+    }
+
+    /// They cross the budget at the same instant — the high-water is set *by* the
+    /// displacement — which is what lets the drawing latch on one and draw the other
+    /// without the two appearing to disagree.
+    @Test func displacementAndMaxTravelAgreeUntilTheFingerRetreats() throws {
+        let live = try #require(recognizerAfter(
+            stillDown(from: CGPoint(x: 0.5, y: 0.5), to: CGPoint(x: 0.53, y: 0.54))
+        ).liveContacts.first)
+        #expect(live.displacement == live.maxTravel)
+    }
+
     @Test func areOrderedByDeviceThenID() {
         let r = MouseGestureRecognizer(layout: ZoneLayout(), config: GestureConfig())
         let p = CGPoint(x: 0.5, y: 0.5)

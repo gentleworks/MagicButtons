@@ -35,17 +35,23 @@ public final class VisualizerModel {
         public let id: Int32
         /// Normalized, origin bottom-left — the point travel is measured from.
         public let origin: CGPoint
-        /// Greatest distance from `origin` reached so far, normalized.
-        public let travel: CGFloat
-        /// The threshold `travel` is judged against, normalized.
+        /// Greatest distance from `origin` reached so far — **the value judged**. It
+        /// ratchets, so it is what decides whether the budget was ever spent.
+        public let maxTravel: CGFloat
+        /// Distance from `origin` right now, which falls again when the finger comes
+        /// back. Drawn, but never judged. Named apart from `maxTravel` on purpose: the
+        /// two are equal until the finger retreats, which makes them easy to confuse.
+        public let displacement: CGFloat
+        /// The threshold `maxTravel` is judged against, normalized.
         public let budget: CGFloat
         public let verdict: Verdict
 
-        public init(id: Int32, origin: CGPoint, travel: CGFloat,
+        public init(id: Int32, origin: CGPoint, maxTravel: CGFloat, displacement: CGFloat,
                     budget: CGFloat, verdict: Verdict) {
             self.id = id
             self.origin = origin
-            self.travel = travel
+            self.maxTravel = maxTravel
+            self.displacement = displacement
             self.budget = budget
             self.verdict = verdict
         }

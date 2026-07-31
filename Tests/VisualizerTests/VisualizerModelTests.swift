@@ -109,11 +109,13 @@ import TouchKit
 @MainActor
 @Suite struct VisualizerBudgetTests {
     private func budget(
-        id: Int32 = 1, travel: CGFloat = 0.01,
+        id: Int32 = 1, maxTravel: CGFloat = 0.01, displacement: CGFloat? = nil,
         verdict: VisualizerModel.ContactBudget.Verdict = .wouldTap
     ) -> VisualizerModel.ContactBudget {
         VisualizerModel.ContactBudget(id: id, origin: CGPoint(x: 0.5, y: 0.5),
-                                      travel: travel, budget: 0.06, verdict: verdict)
+                                      maxTravel: maxTravel,
+                                      displacement: displacement ?? maxTravel,
+                                      budget: 0.06, verdict: verdict)
     }
 
     private func touch(_ x: CGFloat) -> SurfaceTouch {
@@ -136,9 +138,9 @@ import TouchKit
 
     @Test func updatePublishesBudgets() {
         let model = VisualizerModel()
-        model.update([touch(0.5)], budgets: [budget(travel: 0.03)])
+        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.03)])
         #expect(model.budgets.count == 1)
-        #expect(model.budgets.first?.travel == 0.03)
+        #expect(model.budgets.first?.maxTravel == 0.03)
         #expect(model.budgets.first?.verdict == .wouldTap)
     }
 
@@ -151,9 +153,18 @@ import TouchKit
         #expect(model.budgets.isEmpty)
     }
 
+    /// The two are equal until the finger retreats; after that the drawing needs both,
+    /// so the model must not collapse them.
+    @Test func carriesDisplacementApartFromTheHighWaterMark() {
+        let model = VisualizerModel()
+        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.05, displacement: 0.01)])
+        #expect(model.budgets.first?.maxTravel == 0.05)
+        #expect(model.budgets.first?.displacement == 0.01)
+    }
+
     @Test func carriesTheVerdictThatTripped() {
         let model = VisualizerModel()
-        model.update([touch(0.5)], budgets: [budget(travel: 0.09, verdict: .rejectedTravel)])
+        model.update([touch(0.5)], budgets: [budget(maxTravel: 0.09, verdict: .rejectedTravel)])
         #expect(model.budgets.first?.verdict == .rejectedTravel)
     }
 }

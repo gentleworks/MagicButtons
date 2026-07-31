@@ -153,22 +153,35 @@ public struct VisualizerView: View {
     /// *is* the gate's real anisotropy, not a drawing artifact (docs/10 §Visualizer).
     private func budgetRings(in size: CGSize) -> some View {
         ForEach(model.budgets) { b in
-            let tripped = b.verdict == .rejectedTravel
+            // Latched on the **high-water**, not on live displacement: coming back inside
+            // does not restore a spent budget, so once this is true it stays true for the
+            // contact's life. Tested on the measurement rather than on
+            // `verdict == .rejectedTravel`, because the verdict reports the *first* gate to
+            // fail in order — a contact that outran both the tap window and the budget
+            // names duration, and would otherwise never show as tripped here.
+            let exceeded = b.maxTravel > b.budget
             ZStack {
-                // Travel reached so far: the locus of points at this contact's furthest
-                // distance from its origin. A measured distance, drawn to scale.
-                Ellipse()
-                    // `.primary`, not the accent: the contact underneath is accent-filled,
-                    // so an accent ring on top of it disappears into its own colour.
-                    .stroke(Color.primary.opacity(0.85), lineWidth: 1)
-                    .frame(width: b.travel * size.width * 2,
-                           height: b.travel * size.height * 2)
+                // Where the finger is **now**, relative to where it started: a ring through
+                // the contact's own centre that grows and shrinks as you move. This is the
+                // reading you can calibrate against — a high-water ring only ratchets, so
+                // it can never show what a threshold *feels* like. The high-water is not
+                // drawn: its whole observable consequence is whether the budget was ever
+                // spent, and the latch below says that. Both cross the boundary at the same
+                // instant, since the high-water is set by this very value.
+                if !exceeded {
+                    Ellipse()
+                        // `.primary`, not the accent: the contact underneath is accent-filled,
+                        // so an accent ring on top of it disappears into its own colour.
+                        .stroke(Color.primary.opacity(0.85), lineWidth: 1)
+                        .frame(width: b.displacement * size.width * 2,
+                               height: b.displacement * size.height * 2)
+                }
                 // The budget itself. Solid once travel has exceeded it, dashed while
                 // there is headroom — so the state is not carried by colour alone.
                 Ellipse()
-                    .stroke(tripped ? Color.red : Color.primary.opacity(0.55),
-                            style: tripped ? StrokeStyle(lineWidth: 2)
-                                           : StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .stroke(exceeded ? Color.red : Color.primary.opacity(0.55),
+                            style: exceeded ? StrokeStyle(lineWidth: 2)
+                                            : StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .frame(width: b.budget * size.width * 2,
                            height: b.budget * size.height * 2)
                 // The origin, so the ring's anchor stays visible once the finger drifts.

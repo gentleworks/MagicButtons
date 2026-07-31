@@ -230,8 +230,9 @@ final class AppModel {
             // the visualizer's own vocabulary so that package stays free of GestureEngine.
             self.visualizer.update(frame, budgets: self.coordinator.liveContacts.map {
                 VisualizerModel.ContactBudget(
-                    id: $0.id, origin: $0.origin, travel: $0.maxTravel,
-                    budget: $0.travelBudget, verdict: Self.budgetVerdict($0.verdictSoFar))
+                    id: $0.id, origin: $0.origin, maxTravel: $0.maxTravel,
+                    displacement: $0.displacement, budget: $0.travelBudget,
+                    verdict: Self.budgetVerdict($0.verdictSoFar))
             })
             self.streamHealth.noteFrame(at: ProcessInfo.processInfo.systemUptime)
             // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one

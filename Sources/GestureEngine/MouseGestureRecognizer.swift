@@ -24,7 +24,12 @@ public struct LiveContact: Sendable, Equatable, Identifiable {
     public let origin: CGPoint
     public let zone: MouseZone
     /// Greatest Euclidean distance from `origin` reached so far, in normalized space.
+    /// **This is the value the gate judges** — it ratchets and never falls.
     public let maxTravel: CGFloat
+    /// Distance from `origin` *right now*, which falls again when the finger comes
+    /// back. Judged on nothing; carried so a display can show where the finger is
+    /// against the threshold rather than only how far it once got.
+    public let displacement: CGFloat
     /// The `maxTravel` this contact will actually be judged against — carried from the
     /// recognizer's own live config so a drawn ring cannot show a stale threshold.
     public let travelBudget: CGFloat
@@ -36,14 +41,15 @@ public struct LiveContact: Sendable, Equatable, Identifiable {
 
     public init(
         id: Int32, deviceID: MouseDeviceID, origin: CGPoint, zone: MouseZone,
-        maxTravel: CGFloat, travelBudget: CGFloat, verdictSoFar: TapVerdict,
-        didBeginHold: Bool
+        maxTravel: CGFloat, displacement: CGFloat, travelBudget: CGFloat,
+        verdictSoFar: TapVerdict, didBeginHold: Bool
     ) {
         self.id = id
         self.deviceID = deviceID
         self.origin = origin
         self.zone = zone
         self.maxTravel = maxTravel
+        self.displacement = displacement
         self.travelBudget = travelBudget
         self.verdictSoFar = verdictSoFar
         self.didBeginHold = didBeginHold
@@ -178,6 +184,7 @@ public final class MouseGestureRecognizer {
                 origin: state.contact.origin,
                 zone: state.contact.zone,
                 maxTravel: state.contact.maxTravel,
+                displacement: state.contact.displacement,
                 travelBudget: config.maxTravel,
                 verdictSoFar: state.contact.verdict(at: state.contact.lastTime,
                                                     against: config),
