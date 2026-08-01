@@ -12,11 +12,11 @@
 
 MagicButtons now reconnects to the mouse when your Mac wakes, and notices on its own if a real click ever arrives with no fingers detected — a combination that can't happen on a working mouse — and reconnects then too. If reconnecting genuinely doesn't help, the Status pane now says so rather than suggesting a relaunch you may have already tried.
 ]]></description>
-            <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons-1.1.2-5.dmg" length="3144324" type="application/octet-stream" sparkle:edSignature="x6djvnaoR4xOzvelw3b0J8WZ6rZxRc4ILUo54OEvC/btiojPi4+T4L9YLGLF02eeNlLapdrCfcgBCEu22X0ZCg=="/>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.2-5.dmg" length="3144324" type="application/octet-stream" sparkle:edSignature="x6djvnaoR4xOzvelw3b0J8WZ6rZxRc4ILUo54OEvC/btiojPi4+T4L9YLGLF02eeNlLapdrCfcgBCEu22X0ZCg=="/>
             <sparkle:deltas>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons5-4.delta" sparkle:deltaFrom="4" length="137270" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="WZe+P8CoTEutoOtaeKOJKnKXO2Bo73z7I9IgMTNPkDl5Kq0nCkTETF8SNm7fOv8vsmf35ZucIiNuHM4i3Rl6AA=="/>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons5-3.delta" sparkle:deltaFrom="3" length="253730" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="z2EShS56gM8NNvdKcNG5l8Wjb84kCWNBK/gNfaTC9bcYi+oE+bLBsRoaIyRKoD6RE6RAOIVkU1esT7oAhm1fBw=="/>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons5-2.delta" sparkle:deltaFrom="2" length="261458" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="1AbNdG54MHDPNrH2F+6L0twDUekXXp/cTVkA/yyCtaat/M6DNGEW0rGAFMwUjn1YAzmhkAF3SKTzQv4SVLo3AQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-4.delta" sparkle:deltaFrom="4" length="137270" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="WZe+P8CoTEutoOtaeKOJKnKXO2Bo73z7I9IgMTNPkDl5Kq0nCkTETF8SNm7fOv8vsmf35ZucIiNuHM4i3Rl6AA=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-3.delta" sparkle:deltaFrom="3" length="253730" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="z2EShS56gM8NNvdKcNG5l8Wjb84kCWNBK/gNfaTC9bcYi+oE+bLBsRoaIyRKoD6RE6RAOIVkU1esT7oAhm1fBw=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-2.delta" sparkle:deltaFrom="2" length="261458" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="1AbNdG54MHDPNrH2F+6L0twDUekXXp/cTVkA/yyCtaat/M6DNGEW0rGAFMwUjn1YAzmhkAF3SKTzQv4SVLo3AQ=="/>
             </sparkle:deltas>
         </item>
         <item>
@@ -63,13 +63,13 @@ recognized, and when. It never records text, cursor positions, or key presses �
 safe to attach to a public bug report. Recording is always off when MagicButtons starts,
 and stops on its own after 30 minutes.
 
-Reports can be filed as Issues on the Codeberg project at [https://codeberg.org/anguiano/MagicButtons/issues/new](https://codeberg.org/anguiano/MagicButtons/issues/new).  Keep in mind this is a free volunteer
+Reports can be filed as Issues on the Codeberg project at [https://codeberg.org/gentleworks/MagicButtons/issues/new](https://codeberg.org/gentleworks/MagicButtons/issues/new).  Keep in mind this is a free volunteer
 project and response times may be long and inconsistent.
 ]]></description>
-            <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons-1.1.1-4.dmg" length="3134577" type="application/octet-stream" sparkle:edSignature="o0vg3En4fVDPOgczfrxauHPtGz5ODkwp8i4J+DjMgzdLz9UvtrNu9W8F1p1y2g58AMR+5MRe4OUX7E9DyyHvAg=="/>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.1-4.dmg" length="3134577" type="application/octet-stream" sparkle:edSignature="o0vg3En4fVDPOgczfrxauHPtGz5ODkwp8i4J+DjMgzdLz9UvtrNu9W8F1p1y2g58AMR+5MRe4OUX7E9DyyHvAg=="/>
             <sparkle:deltas>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons4-3.delta" sparkle:deltaFrom="3" length="248318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="hTZCQLCKY/sggBmS6RPE67ueJWwKIVY7BU5Sn0E7s+b+gLp2OkJEdGiIMbGX9X3WkHhIBOrh1fa1/Wuvvs+9AQ=="/>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons4-2.delta" sparkle:deltaFrom="2" length="254734" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ee/vv17xUvEZ0ikq4UqaZFSflcyjPWYWncGn1jD9Wp+dbP7axyRLTdEH92k+7tV2APp1dbWwN/zl3e60dnr7BQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-3.delta" sparkle:deltaFrom="3" length="248318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="hTZCQLCKY/sggBmS6RPE67ueJWwKIVY7BU5Sn0E7s+b+gLp2OkJEdGiIMbGX9X3WkHhIBOrh1fa1/Wuvvs+9AQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-2.delta" sparkle:deltaFrom="2" length="254734" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ee/vv17xUvEZ0ikq4UqaZFSflcyjPWYWncGn1jD9Wp+dbP7axyRLTdEH92k+7tV2APp1dbWwN/zl3e60dnr7BQ=="/>
             </sparkle:deltas>
         </item>
         <item>
@@ -78,9 +78,9 @@ project and response times may be long and inconsistent.
             <sparkle:version>3</sparkle:version>
             <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons-1.1.0-3.dmg" length="2755047" type="application/octet-stream" sparkle:edSignature="arTGPwRrsWmvxfvoq1Z+KcRsuLmP91ckJeTlV7w0NvXukTuIWNA3cvspzgQTvi22qVNX6X5t43Ar0NetqawuAg=="/>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.0-3.dmg" length="2755047" type="application/octet-stream" sparkle:edSignature="arTGPwRrsWmvxfvoq1Z+KcRsuLmP91ckJeTlV7w0NvXukTuIWNA3cvspzgQTvi22qVNX6X5t43Ar0NetqawuAg=="/>
             <sparkle:deltas>
-                <enclosure url="https://anguiano.codeberg.page/MagicButtons/MagicButtons3-2.delta" sparkle:deltaFrom="2" length="19334" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="MLDT/dMhKERnSjmFWpSuJD3TT1aoRK+S0EnhcXPqB1VVm4+Mksdt/FPfY97V6UxsJ7taJHUdEKdr47oJ1XaLDA=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons3-2.delta" sparkle:deltaFrom="2" length="19334" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="MLDT/dMhKERnSjmFWpSuJD3TT1aoRK+S0EnhcXPqB1VVm4+Mksdt/FPfY97V6UxsJ7taJHUdEKdr47oJ1XaLDA=="/>
             </sparkle:deltas>
         </item>
     </channel>
