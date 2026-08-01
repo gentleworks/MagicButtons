@@ -9,7 +9,7 @@ place without building them now.
   integration (Sparkle 2.9.4, app-target only) + EdDSA keys + the full release pipeline
   (build-number forcing function → re-signed helpers → notarize → signed appcast →
   `--publish` to Codeberg Pages) are built, a notarized **build 1.1.0 (3)** is **live** on
-  `anguiano.codeberg.page/MagicButtons/`, and a build 2→3 auto-update **installed cleanly on
+  `gentleworks.codeberg.page/MagicButtons/`, and a build 2→3 auto-update **installed cleanly on
   hardware**. Decisions: hosting = Codeberg Pages, checks = automatic + manual, format = DMG.
   Recorded in `14-post-v1.md` §Sparkle. **Still deferred:** the **beta appcast channel**
   (in v2 candidates below).
@@ -114,13 +114,13 @@ place without building them now.
     version "1.1.2,5"
     sha256 "0288c64355ddae6cf04c7beb572c4eb18526713b6837c317dabc57f9be1cedbc"
 
-    url "https://codeberg.org/anguiano/MagicButtons/releases/download/v#{version.csv.first}-#{version.csv.second}/MagicButtons-#{version.csv.first}-#{version.csv.second}.dmg"
+    url "https://codeberg.org/gentleworks/MagicButtons/releases/download/v#{version.csv.first}-#{version.csv.second}/MagicButtons-#{version.csv.first}-#{version.csv.second}.dmg"
     name "MagicButtons"
     desc "Middle button and tap-to-click for the Apple Magic Mouse"
-    homepage "https://codeberg.org/anguiano/MagicButtons"
+    homepage "https://codeberg.org/gentleworks/MagicButtons"
 
     livecheck do
-      url "https://anguiano.codeberg.page/MagicButtons/appcast.xml"
+      url "https://gentleworks.codeberg.page/MagicButtons/appcast.xml"
       strategy :sparkle
     end
 

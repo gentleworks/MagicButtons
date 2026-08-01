@@ -62,7 +62,7 @@ struct AboutView: View {
 
     private static var copyright: String? { info("NSHumanReadableCopyright") }
 
-    private static let homepage = URL(string: "https://codeberg.org/anguiano/MagicButtons")!
+    private static let homepage = URL(string: "https://codeberg.org/gentleworks/MagicButtons")!
 
     private static func info(_ key: String) -> String? {
         Bundle.main.object(forInfoDictionaryKey: key) as? String

@@ -167,7 +167,7 @@ after the notarize round-trip:
 silently, and `updates/` can agree with itself while the site disagrees:
 
 ```
-curl -s https://anguiano.codeberg.page/MagicButtons/appcast.xml
+curl -s https://gentleworks.codeberg.page/MagicButtons/appcast.xml
 ```
 
 The item for this build must carry an `edSignature` on its enclosure and a non-empty

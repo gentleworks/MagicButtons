@@ -68,7 +68,7 @@ DMG="$DIST/$SCHEME.dmg"
 # publishing = syncing its contents to the Pages location (see the end of this script).
 # generate_appcast lives in the resolved Sparkle SPM artifacts under the derived data.
 UPDATES="$REPO/updates"
-PAGES_URL_PREFIX="${MB_PAGES_URL_PREFIX:-https://anguiano.codeberg.page/MagicButtons/}"
+PAGES_URL_PREFIX="${MB_PAGES_URL_PREFIX:-https://gentleworks.codeberg.page/MagicButtons/}"
 SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
 
 # Where the `pages` orphan branch is checked out (a linked git worktree). Create it once:
@@ -81,7 +81,7 @@ PAGES_WORKTREE="${MB_PAGES_WORKTREE:-$REPO/../MagicButtons-pages}"
 # hand-download and the auto-updater stay in lockstep with no web-UI clicking. Token
 # is per-signer, kept out of git (release.local.env); repo defaults to the public one.
 CODEBERG_API="https://codeberg.org/api/v1"
-CODEBERG_REPO="${MB_CODEBERG_REPO:-anguiano/MagicButtons}"
+CODEBERG_REPO="${MB_CODEBERG_REPO:-gentleworks/MagicButtons}"
 CODEBERG_TOKEN="${MB_CODEBERG_TOKEN:-}"
 
 SKIP_NOTARIZE=0

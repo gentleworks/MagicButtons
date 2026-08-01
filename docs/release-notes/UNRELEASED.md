@@ -46,3 +46,7 @@ listen to, and lifting your finger says nothing at all. You'll only hear it whil
 visualizer or Settings window is the one you're in front of — using your mouse anywhere
 else stays silent. Landing on the picture itself reads out the current zone and how many
 fingers are down.
+
+MagicButtons has a new home at codeberg.org/gentleworks/MagicButtons. The Homepage link in
+About points there, and updates now come from the new address. There's nothing to do on your
+end — this version already knows where to look.

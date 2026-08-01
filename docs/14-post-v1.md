@@ -159,7 +159,7 @@ and (later) a Sparkle "Check for Updates…" hang off. *As built:*
 
 - **`AppShell/AboutView.swift`** — app icon (`NSApp.applicationIconImage`, 96×96), app
   name, `Version 1.1.0 (2)`, the copyright line, and a **Homepage** link to
-  `https://codeberg.org/anguiano/MagicButtons`. Version/build/copyright/name are read
+  `https://codeberg.org/gentleworks/MagicButtons`. Version/build/copyright/name are read
   from the bundle (`CFBundleShortVersionString`, `CFBundleVersion`,
   `NSHumanReadableCopyright`, `CFBundleDisplayName`) — single source of truth, so a
   `project.yml` version bump flows through with no code edit.
@@ -195,7 +195,7 @@ existing DMG** (no separate ZIP; Sparkle mounts the DMG and copies the `.app` ou
   *About*) and to the About card (`AboutView`, replacing its placeholder slot). About
   window grew 300→340 pt for the extra control.
 - **Info.plist** (`AppShell/Info.plist`): `SUFeedURL =
-  https://anguiano.codeberg.page/MagicButtons/appcast.xml`, `SUPublicEDKey` (real key,
+  https://gentleworks.codeberg.page/MagicButtons/appcast.xml`, `SUPublicEDKey` (real key,
   below). `SUEnableAutomaticChecks` is **intentionally omitted** so Sparkle shows its
   standard one-time "check automatically?" consent prompt on the second launch and honors
   the user's choice.
@@ -238,8 +238,16 @@ key out-of-band.
   staple/publish anything that isn't `Accepted`.)
 - `updates/` is gitignored — it's the **local mirror of the Codeberg Pages site**.
 - **Publish (`--publish`).** Codeberg Pages serves the feed from a **`pages` orphan branch
-  in this repo** → `https://anguiano.codeberg.page/MagicButtons/` (branch-name method: the
-  repo name becomes the URL path; verified live, `curl -sI …/appcast.xml` → 200). The branch
+  in this repo** → `https://gentleworks.codeberg.page/MagicButtons/` (the repo name becomes
+  the URL path; verified live, `curl -sI …/appcast.xml` → 200). Codeberg runs **git-pages**,
+  which is *push-driven*: the branch alone publishes nothing, a **Forgejo webhook** on this
+  repo has to fire. Configured once under Settings → Webhooks → type *Forgejo*, Target URL
+  `https://gentleworks.codeberg.page/MagicButtons/`, **branch filter `pages`**. Codeberg's
+  docs warn the webhook page's **"Test delivery" button always fails** — that's expected;
+  verify with a real push. **If that hook is ever removed, publishing fails silently:** the
+  push succeeds, the site goes on serving the previous appcast, and the §2.5 forcing function
+  below reads a stale-but-plausible feed rather than erroring — so confirm the *served* build
+  after every cut (docs/07 §Post-cut). The branch
   is checked out as a linked git **worktree** at `../MagicButtons-pages` (orphan → keeps the
   DMGs out of `main`'s history; created once with `git worktree add --orphan -b pages
   ../MagicButtons-pages`, overridable via `MB_PAGES_WORKTREE`). `./scripts/release.sh
@@ -255,14 +263,14 @@ key out-of-band.
   reads only the Pages appcast/enclosure URLs. Needs a token with the `repository:write` scope in
   `MB_CODEBERG_TOKEN` (kept in `scripts/release.local.env`, gitignored); without it the step is
   skipped with a warning so Pages still publishes. Idempotent — if the tag's release already
-  exists it's left untouched (safe to re-run). Repo defaults to `anguiano/MagicButtons`,
+  exists it's left untouched (safe to re-run). Repo defaults to `gentleworks/MagicButtons`,
   overridable via `MB_CODEBERG_REPO`.
 - The full release loop is now one command: bump `CURRENT_PROJECT_VERSION` →
   `./scripts/release.sh --publish` (optionally `--notes RELEASE_NOTES.md` for the Codeberg body).
 
 **Shipped live:** build **1.1.0 (3)** was built, re-signed, **notarized** (submission
 `78823f24…` Accepted), stapled, appcast-signed, and **published to Codeberg Pages** via
-`./scripts/release.sh --publish` — `https://anguiano.codeberg.page/MagicButtons/appcast.xml`
+`./scripts/release.sh --publish` — `https://gentleworks.codeberg.page/MagicButtons/appcast.xml`
 serves version 3 (curl 200, valid `edSignature`, stapled DMG). The full pipeline ran
 end-to-end in one command.
 
