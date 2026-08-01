@@ -56,6 +56,9 @@ CONFIGURATION="Release"
 BUNDLE_ID="com.gentleworks.MagicButtons"
 VOLNAME="MagicButtons"
 NOTARY_PROFILE="${NOTARY_PROFILE:-MagicButtons-Notary}"
+# How long to let Apple's notary service run before giving up (see §4). Generous — a real
+# review that is merely slow should finish, not get cut off — but finite.
+NOTARY_TIMEOUT="${MB_NOTARY_TIMEOUT:-20m}"
 
 DERIVED="$REPO/build/release"
 DIST="$REPO/dist"
@@ -133,6 +136,68 @@ api() {
   API_STATUS="${out##*$'\n'}"
   API_BODY="${out%$'\n'*}"
   [[ "$API_STATUS" == 2* ]]
+}
+
+# Is the last api() failure worth another go? 5xx is Codeberg faulting on its own side, 429
+# is it asking us to slow down, and 000 is curl never completing the exchange — all of which
+# a later identical request can succeed at. Every 4xx is us: a bad token scope, a malformed
+# payload, a tag that doesn't exist. Retrying those only delays a real error and buries the
+# status that diagnoses it, so they fail immediately.
+api_retryable() { [[ "$API_STATUS" == 5* || "$API_STATUS" == 429 || "$API_STATUS" == 000 ]]; }
+
+# Backoff between attempts. Both observed 500s cleared on an immediate retry, so this is
+# insurance rather than necessity — but escalating costs nothing when the request works.
+API_BACKOFF=(5 15 45)
+
+# api() with retries, for requests that are safe to simply repeat. NOT safe for anything
+# that creates a resource — see create_release for why a bare retry is wrong there.
+api_retry() {
+  local attempt=1 max=3 delay
+  while :; do
+    if api "$@"; then return 0; fi
+    if [[ $attempt -ge $max ]] || ! api_retryable; then return 1; fi
+    delay="${API_BACKOFF[$((attempt-1))]}"
+    printf '\033[33m  ⚠ HTTP %s — retrying in %ss (attempt %s/%s)\033[0m\n' \
+      "$API_STATUS" "$delay" "$((attempt+1))" "$max" >&2
+    sleep "$delay"
+    attempt=$((attempt+1))
+  done
+}
+
+# Creating a release is NOT safe to retry blindly. Codeberg can create the release and still
+# fail the response, so a second POST would either duplicate it or die on a confusing
+# "already exists" — a worse failure than the transient one being papered over. A 5xx means
+# "the write may or may not have landed", so before re-POSTing, ask. The same GET
+# do_codeberg_release already uses as its idempotency guard answers it, and adopting an
+# existing release is precisely the right outcome: the resource we wanted is there.
+# Sets RELEASE_ID on success. Reports the POST's status on failure, not the probe's.
+create_release() {
+  local tag="$1" payload="$2" attempt=1 max=3 delay post_status post_body
+  while :; do
+    if api -X POST "$CODEBERG_API/repos/$CODEBERG_REPO/releases" \
+         -H "Authorization: token $CODEBERG_TOKEN" -H "Content-Type: application/json" \
+         -d "$payload"; then
+      RELEASE_ID="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' <<<"$API_BODY")"
+      return 0
+    fi
+    post_status="$API_STATUS"; post_body="$API_BODY"
+    if [[ $attempt -ge $max ]] || ! api_retryable; then
+      API_STATUS="$post_status"; API_BODY="$post_body"; return 1
+    fi
+    printf '\033[33m  ⚠ HTTP %s — checking whether the release landed anyway…\033[0m\n' \
+      "$post_status" >&2
+    if api "$CODEBERG_API/repos/$CODEBERG_REPO/releases/tags/$tag" \
+         -H "Authorization: token $CODEBERG_TOKEN"; then
+      RELEASE_ID="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' <<<"$API_BODY")"
+      echo "    it did — the error was cosmetic; adopting release $tag" >&2
+      return 0
+    fi
+    delay="${API_BACKOFF[$((attempt-1))]}"
+    printf '\033[33m    it did not — retrying in %ss (attempt %s/%s)\033[0m\n' \
+      "$delay" "$((attempt+1))" "$max" >&2
+    sleep "$delay"
+    attempt=$((attempt+1))
+  done
 }
 
 # UNRELEASED.md opens with a stub preamble — an "# Unreleased" heading and an HTML comment
@@ -277,7 +342,7 @@ do_publish() {
 # hand-download. Uses the Forgejo REST API (Codeberg runs Forgejo — `gh` is GitHub-only).
 # Best-effort: a missing token warns rather than aborting, since Pages is already published.
 do_codeberg_release() {
-  local short build versioned tag name sha body payload release_json id
+  local short build versioned tag name sha body payload id
   if [[ -z "$CODEBERG_TOKEN" ]]; then
     printf '\033[33m  ⚠ MB_CODEBERG_TOKEN not set — skipping the Codeberg Release.\033[0m\n' >&2
     echo   "    Sparkle is published; to mirror the download, create a token (repository:write) at" >&2
@@ -326,19 +391,20 @@ print(json.dumps({
   # Note for whoever reads this after a failure: by this point the tag is pushed AND this
   # build is in the local appcast, so a full re-run dies on the newer-than-last check
   # (§2.5). Recovery is to redo *this step only*, not the script.
-  api -X POST "$CODEBERG_API/repos/$CODEBERG_REPO/releases" \
-    -H "Authorization: token $CODEBERG_TOKEN" -H "Content-Type: application/json" \
-    -d "$payload" \
+  create_release "$tag" "$payload" \
     || die "Codeberg release creation failed for $tag — HTTP $API_STATUS
   $API_BODY
-  A 5xx here is usually transient and clears on an identical retry; a 4xx is real (check
-  the token's repository:write scope). Pages is already published either way — retry this
-  step alone, since a full re-run would fail the newer-than-last check."
-  release_json="$API_BODY"
-  id="$(python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' <<<"$release_json")" \
-    || die "could not parse the release id from Codeberg's response:
-  $release_json"
-  api -X POST \
+  Transient faults (5xx/429) were already retried $((${#API_BACKOFF[@]})) times with backoff, and
+  each retry re-checked whether the release had landed anyway — so this is either a real 4xx
+  (check the token's repository:write scope) or Codeberg being down for longer than that.
+  Pages is already published either way — retry this step alone, since a full re-run would
+  fail the newer-than-last check."
+  id="$RELEASE_ID"
+  # Retried plainly: re-uploading an asset is safe in a way creating the release is not. A
+  # duplicate name is rejected by Codeberg rather than silently doubling the download, and
+  # this failing after the release exists is the worse repair job — it leaves a release page
+  # with no download on it.
+  api_retry -X POST \
     "$CODEBERG_API/repos/$CODEBERG_REPO/releases/$id/assets?name=$(basename "$versioned")" \
     -H "Authorization: token $CODEBERG_TOKEN" \
     -F "attachment=@$versioned;type=application/octet-stream" \
@@ -500,7 +566,15 @@ step "Notarizing DMG (this waits for Apple)"
 # `notarytool submit --wait` exits 0 as long as processing COMPLETED — even when the
 # result is Invalid — so we must inspect the status ourselves, or we'd staple a rejected
 # build. On failure, auto-fetch Apple's per-issue log so the reason is right here.
-NOTARY_JSON="$(xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)"
+#
+# --timeout is not belt-and-braces: without it, `--wait` blocks forever with no output, and
+# a submit that never reaches Apple is indistinguishable from one Apple is still reviewing.
+# That is not hypothetical — the 1.1.3 cut sat in exactly that state for 7.5 hours before
+# anyone looked, with zero CPU, no open sockets, and nothing in the submission history. A
+# bound turns an unfalsifiable wait into an error you can act on. If you ever need to tell
+# the two apart while a submit is running, elapsed time cannot: check consumed CPU
+# (`ps -o time= -p <pid>`) and open sockets (`lsof -nPp <pid>`), which can.
+NOTARY_JSON="$(xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait --timeout "$NOTARY_TIMEOUT" --output-format json)"
 echo "$NOTARY_JSON"
 NOTARY_STATUS="$(grep -o '"status":"[^"]*"' <<<"$NOTARY_JSON" | head -1 | cut -d'"' -f4)"
 SUBMISSION_ID="$(grep -o '"id":"[^"]*"' <<<"$NOTARY_JSON" | head -1 | cut -d'"' -f4)"

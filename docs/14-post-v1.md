@@ -265,6 +265,23 @@ key out-of-band.
   skipped with a warning so Pages still publishes. Idempotent — if the tag's release already
   exists it's left untouched (safe to re-run). Repo defaults to `gentleworks/MagicButtons`,
   overridable via `MB_CODEBERG_REPO`.
+- **Transient-fault retries on that mirror.** The release POST is the step that actually
+  fails: it 500'd on the 1.1.2 cut *and* the 1.1.3 cut, clearing both times on an identical
+  retry. `create_release` now retries 5xx/429/transport faults three times with 5s/15s/45s
+  backoff. It is deliberately **not** a bare retry loop — a 5xx can be returned *after*
+  Codeberg created the release, so each attempt first re-probes `releases/tags/<tag>` and
+  adopts an existing release rather than POSTing a duplicate. 4xx never retries: that is a
+  real fault (token scope, malformed payload) and retrying only delays the error while
+  burying the status that diagnoses it. The asset upload gets a plain `api_retry` — a
+  duplicate asset name is rejected server-side, and its failure leaves the worse artifact: a
+  release page with no download.
+- **Notarization is time-bounded.** `notarytool submit --wait` is passed
+  `--timeout` (`MB_NOTARY_TIMEOUT`, default `20m`). Without a bound it blocks *forever* with
+  no output, and a submit that never reached Apple looks exactly like one Apple is still
+  reviewing — the 1.1.3 cut sat that way for 7.5 hours. To tell the two apart while a submit
+  runs, elapsed time is useless; consumed CPU (`ps -o time= -p <pid>`) and open sockets
+  (`lsof -nPp <pid>`) are decisive, and a submission absent from `notarytool history` never
+  reached Apple at all.
 - The full release loop is now one command: bump `CURRENT_PROJECT_VERSION` →
   `./scripts/release.sh --publish` (optionally `--notes RELEASE_NOTES.md` for the Codeberg body).
 
