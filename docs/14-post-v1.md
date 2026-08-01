@@ -700,6 +700,60 @@ The pattern worth carrying: **a check that can't run should not look like a chec
 passed.** #3 was invisible precisely because its skip path and its success path printed the
 same thing.
 
+## The 1.1.3 cut — moving the repo, and two more failures (post-1.1.3)
+
+**1.1.3 (build 6) shipped 2026-08-01**, the first cut from the `gentleworks` organization.
+The repo had been created under a personal account by mistake; moving it before the project
+was advertised is what made the cost acceptable.
+
+**What doesn't follow a repo transfer.** Forgejo 301s the old repo URL, so links and clones
+survive. **Codeberg Pages does not** — its hostname is derived from the repo *owner*, so the
+feed host changed with no redirect and no grace period. Two consequences. The published
+appcast's enclosure URLs all pointed at a host that no longer served this repo; rewriting
+them in place was safe without regenerating, because `sparkle:edSignature` covers the
+archive *bytes*, not the enclosure URL — every signature stayed byte-identical and still
+verified. And `SUFeedURL` is read from the bundle at launch, so **every build ≤1.1.2 polls
+the dead host forever** and cannot be retargeted remotely. Those installs are permanently
+stranded; each needs a manual download. That was a deliberate trade against maintaining a
+redirect stub, and it is only defensible because nothing had been advertised.
+
+Worse than dead, briefly: the old host kept serving a *cached* appcast for a while, so old
+builds reported "you're up to date" rather than failing. **A stale success is harder to
+notice than an error.**
+
+**Notarization hung for 7.5 hours.** `notarytool submit --wait` had no `--timeout`, so when
+the submit never reached Apple it blocked indefinitely with no output. Root cause was the
+*context* the command ran in, not the machine: from a sandboxed automation shell it
+reproduced every time — blocked in `xar_open_digest_verify` → `open()`, having never opened
+a socket — while the identical command in an interactive login shell completed in ~25s. So
+**run cuts from a normal interactive shell.** The submit is now bounded by
+`MB_NOTARY_TIMEOUT` (default `20m`).
+
+The diagnostic mistake is the more transferable part. A submit that never reached Apple and
+one Apple is still reviewing look identical from the outside, and *elapsed time cannot tell
+them apart* — it was read as "still working" for hours. Three things can, all cheap:
+consumed CPU (`ps -o time= -p <pid>` — near-zero over minutes means blocked, not busy), open
+sockets (`lsof -nPp <pid>` — none means it never reached the network), and absence from
+`notarytool history`, which means Apple has no such submission. That last signal was
+actually observed early and dismissed as inconclusive. **Elapsed time is not evidence of
+progress.**
+
+**The Codeberg Release POST 500'd again** — the second consecutive cut, cleared again by an
+identical retry. Recovery was the release plus its asset by hand, then the `UNRELEASED.md`
+truncation, exactly as the 1.1.2 entry above describes. Twice is a pattern, not bad luck, so
+it is now retried automatically (§Sparkle above) — with the re-probe that keeps a retry from
+duplicating a release the server had already created.
+
+**Proving a feed migration.** Server-side checks — the feed resolves, enclosures 200, the
+release asset is byte-identical to the Pages enclosure — say nothing about whether *Sparkle*
+can consume the new feed, and the obvious end-to-end test is impossible: no shipped build
+carries the new URL, and waiting for N+1 defers the answer past the point it is useful. The
+test that works is to **forge an old client**: build the current source at the *previous*
+version with the *new* feed URL, run it, and check for updates. That client discovered build
+6, verified the EdDSA signature, downloaded, and installed — the one check that exercises the
+whole path. It also fell back from the delta to the full DMG, as expected, since a fresh
+build at version 5 is not the published build-5 bytes.
+
 ## Localization — String Catalogs + Spanish ✅ *(done; hardware-free)*
 
 The UI ships in English and Spanish. Nothing about the gesture pipeline changed; this is
