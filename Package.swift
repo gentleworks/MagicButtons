@@ -61,7 +61,12 @@ let package = Package(
         // policy (Phase 7.1), settings persistence (Phase 7.2). Keeps App-layer
         // logic in SwiftPM/CI rather than the untestable executable
         // (docs/01-architecture.md §Composition root, docs/12-project-setup.md).
-        .target(name: "AppCore", dependencies: ["TouchKit", "GestureEngine", "EventOutput"],
+        // `Visualizer` is here for `VisualizerFeed` alone — the recognizer→picture
+        // translation both the app and `mb-dev visualize` need, kept in one copy. It is
+        // the one dependency that puts SwiftUI in AppCore's transitive closure; the
+        // translation itself is pure and imports no UI.
+        .target(name: "AppCore",
+                dependencies: ["TouchKit", "GestureEngine", "EventOutput", "Visualizer"],
                 resources: [.process("Resources")]),
 
         // Composition root (scaffold stub for now — see note above).

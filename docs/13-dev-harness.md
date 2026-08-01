@@ -114,10 +114,23 @@ is for bring-up on a new machine or OS, to confirm the private data layout still
 matches, and for reading what the contact patch is actually doing during a tap.
 You normally won't need it.
 
-**`visualize [sim]`** — Opens a live window drawing finger dots over the three
-zone bands, fed from the real mouse. Great for *seeing* what the recognizer sees.
-`visualize sim` drives a synthetic sweep instead, so it runs with **no hardware** —
-handy for checking the drawing itself. Close the window to quit.
+**`visualize [sim]`** — Opens a live window drawing contact patches over the three zone
+bands, fed from the real mouse. Great for *seeing* what the recognizer sees — and since
+1.1.4 that is literal: it runs the **real `AppCoordinator`** on **your saved settings**,
+so you get the travel-budget rings, the gesture badges and the spoken readout exactly as
+the app draws them, at your own calibrated zone boundaries.
+
+Before 1.1.4 it built a bare model on *default* zones with no recognizer behind it, so it
+drew contacts only — and drew the bands in the wrong place for anyone who had calibrated
+(`docs/06`'s whole point is that the picture and the behaviour can never disagree).
+
+It still **posts nothing and installs no event tap**: the emitter is a silent stub and the
+click source is inert, so it needs no Accessibility grant. The one fidelity difference
+from the running app is that `requireNoPhysicalClick` never fires, since nothing is
+watching for hardware clicks.
+
+`visualize sim` drives a synthetic sweep instead, so it runs with **no hardware** — handy
+for checking the drawing itself. Close the window to quit.
 
 **`verify-two-mouse [seconds]`** — Only relevant if you have **two** Magic Mice.
 Confirms that touches from each mouse stay attributed to the right device, even when

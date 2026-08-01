@@ -1,5 +1,8 @@
 import AppKit
+import AppCore
+import EventOutput
 import Foundation
+import GestureEngine
 import SwiftUI
 import TouchKit
 import Visualizer
@@ -61,9 +64,51 @@ final class VisualizeAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) { onQuit() }
 }
 
+/// Posts nothing, ever. `visualize` is a viewer, not a driver — it must not click the
+/// user's machine while they watch the picture. Deliberately *not* `LoggingEmitter`,
+/// which forwards to a real `CGEventEmitter`.
+final class SilentEmitter: ButtonEmitting {
+    func click(_ zone: MouseZone, count: Int) {}
+    func press(_ zone: MouseZone) {}
+    func release(_ zone: MouseZone) {}
+}
+
+/// A `PhysicalClickSource` that never installs an event tap, so `visualize` still needs
+/// no Accessibility grant. A viewer holding a live `.cghidEventTap` is the exact hazard
+/// that once wedged clicking system-wide when the grant was revoked (docs/14
+/// §Interceptor lifetime), and it buys nothing here: the only behaviour lost is
+/// `requireNoPhysicalClick` rejection, which needs a real hardware click to matter.
+final class InertClickSource: PhysicalClickSource {
+    var onPhysicalClickChange: ((Bool) -> Void)?
+    func start() throws {}
+    func stop() {}
+}
+
+/// The app's own saved settings, read from *its* defaults domain.
+///
+/// `mb-dev` is a separate binary, so `UserDefaults.standard` here is a different domain
+/// than `MagicButtons.app`'s — reading it would silently hand back stock defaults and
+/// the harness would draw zone bands that disagree with what the app actually does.
+/// That is precisely the divergence docs/06 exists to forbid, so the suite is named
+/// explicitly. Falls back to defaults when the app has never run.
+///
+/// The identifier tracks `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`; there is no
+/// shared constant to hang it on, because the package cannot see the Xcode target.
+private func loadAppSettings() -> (settings: AppSettings, foundSaved: Bool) {
+    let appDomain = "com.gentleworks.MagicButtons"
+    guard let defaults = UserDefaults(suiteName: appDomain) else {
+        return (AppSettings(), false)
+    }
+    let store = SettingsStore(storage: UserDefaultsStorage(defaults))
+    let settings = store.load()
+    return (settings, settings != AppSettings())
+}
+
 @MainActor
 func runVisualize(useSimulator: Bool) -> Int32 {
-    let model = VisualizerModel()
+    // Same zone boundaries the app is using, so the bands are not a fiction.
+    let (settings, foundSaved) = loadAppSettings()
+    let model = VisualizerModel(layout: settings.zones)
 
     let source: TouchSource
     if useSimulator {
@@ -78,10 +123,25 @@ func runVisualize(useSimulator: Bool) -> Int32 {
         }
     }
 
-    // Frames arrive off-main (real source hops to a serial queue); marshal to the
-    // main actor before touching the model.
-    source.onFrame = { frame in
-        Task { @MainActor in model.update(frame) }
+    // Drive the picture through the **real** coordinator, on the app's own settings, so
+    // the harness shows what the shipping recognizer would decide — travel rings, gesture
+    // badges and the spoken readout included — rather than a contacts-only shadow of it.
+    // Nothing is emitted (`SilentEmitter`) and no tap is installed (`InertClickSource`).
+    let coordinator = AppCoordinator(
+        source: source,
+        clickSource: InertClickSource(),
+        emitter: SilentEmitter(),
+        settings: settings)
+
+    coordinator.onFrame = { frame in
+        // Read after the coordinator's own ingest, so these are this frame's measurements
+        // from the recognizer that judges them — the same ordering `AppModel` relies on.
+        model.update(frame,
+                     budgets: VisualizerFeed.budgets(coordinator.liveContacts),
+                     at: ProcessInfo.processInfo.systemUptime)
+    }
+    coordinator.onGesture = { gesture in
+        model.register(VisualizerFeed.recognized(gesture))
     }
 
     let app = NSApplication.shared
@@ -96,16 +156,21 @@ func runVisualize(useSimulator: Bool) -> Int32 {
     window.center()
     window.makeKeyAndOrderFront(nil)
 
-    do {
-        try source.start()
-    } catch {
-        print("source start failed: \(error) (often Input Monitoring not granted; docs/07)")
+    // The coordinator owns the source's lifecycle now, and reports a failed start as
+    // status rather than throwing (docs/07) — so ask it afterwards instead of catching.
+    coordinator.start()
+    if let sourceError = coordinator.sourceError {
+        print("source start failed: \(sourceError) (.noDevice = no Magic Mouse attached).")
         return 1
     }
 
-    let delegate = VisualizeAppDelegate { source.stop() }
+    let delegate = VisualizeAppDelegate { coordinator.stop() }
     app.delegate = delegate
+    print(foundSaved
+          ? "Using your saved settings (zones + recognizer tunables) from MagicButtons.app."
+          : "MagicButtons.app has no saved settings yet — showing stock defaults.")
     print("Visualizer window open. Move a finger on the mouse; close the window to quit.")
+    print("Nothing is clicked: this posts no events and installs no event tap.")
     app.activate(ignoringOtherApps: true)
     app.run()
     return 0

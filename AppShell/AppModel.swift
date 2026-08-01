@@ -232,12 +232,9 @@ final class AppModel {
             // Read after `ingest` — the coordinator's tee fires there — so these are this
             // frame's measurements, taken from the recognizer that judges them. Mapped to
             // the visualizer's own vocabulary so that package stays free of GestureEngine.
-            self.visualizer.update(frame, budgets: self.coordinator.liveContacts.map {
-                VisualizerModel.ContactBudget(
-                    id: $0.id, origin: $0.origin, maxTravelMM: $0.maxTravelMM,
-                    displacementMM: $0.displacementMM, budgetMM: $0.travelBudgetMM,
-                    verdict: Self.budgetVerdict($0.verdictSoFar))
-            }, at: now)
+            self.visualizer.update(frame,
+                                   budgets: VisualizerFeed.budgets(self.coordinator.liveContacts),
+                                   at: now)
             self.streamHealth.noteFrame(at: now)
             // Contact stream, when recording. Not recording ⇒ `log` is nil and this is one
             // check per frame — the other two streams aren't even installed.
@@ -248,13 +245,7 @@ final class AppModel {
         // visualizer's TouchKit-only vocabulary so that package stays decoupled.
         coordinator.onGesture = { [weak self] gesture in
             guard let self else { return }
-            let recognized: VisualizerModel.RecognizedGesture
-            switch gesture {
-            case let .click(zone, count): recognized = .click(zone, count: count)
-            case let .holdBegan(zone):    recognized = .holdBegan(zone)
-            case let .holdEnded(zone):    recognized = .holdEnded(zone)
-            }
-            self.visualizer.register(recognized)
+            self.visualizer.register(VisualizerFeed.recognized(gesture))
             // Gesture stream, when recording. Pre-policy on purpose — paired with the
             // emitter's `synth` rows, a gesture with no emission is one the policy dropped,
             // which is the "I tapped and nothing happened" report.
@@ -618,20 +609,6 @@ final class AppModel {
         alert.runModal()
     }
 
-    /// `TapVerdict` → the visualizer's mirror of it. The translation exists because
-    /// `Visualizer` depends on `TouchKit` alone and never on `GestureEngine` (docs/06);
-    /// this is the same boundary `ButtonGesture` → `RecognizedGesture` pays for above.
-    private static func budgetVerdict(
-        _ verdict: TapVerdict
-    ) -> VisualizerModel.ContactBudget.Verdict {
-        switch verdict {
-        case .tap:                   return .wouldTap
-        case .rejectedPhysicalClick: return .rejectedPhysicalClick
-        case .rejectedDuration:      return .rejectedDuration
-        case .rejectedTravel:        return .rejectedTravel
-        case .rejectedSize:          return .rejectedSize
-        }
-    }
 
     // MARK: Actions
 

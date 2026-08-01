@@ -979,3 +979,54 @@ instrument: mouse use outside the app is silent, and the readout speaks only whi
 window is in front. Confirmed as the wanted behaviour, not merely the built one — the
 alternative considered and declined was to speak whenever the Visualizer window is *open*,
 which would make forgetting to close it narrate every mouse touch all day.
+
+## `mb-dev visualize` parity — the harness now runs the real recognizer ✅ *(done 2026-08-01; 271 tests)*
+
+Closing out the visualizer work. The harness drew contacts and zone bands only: no travel
+rings, no gesture badges, no spoken readout — because it built a bare `VisualizerModel`
+with no recognizer behind it.
+
+### The feature gap was the smaller half
+
+The same bare init also took a **default `ZoneLayout`**, while the app uses
+`VisualizerModel(layout: settings.zones)`. So on any calibrated machine the harness drew
+zone boundaries that disagreed with the shipping app — against the invariant `docs/06`
+opens with, *"the picture and the behavior can never disagree"*, and failing in the
+direction that misleads during exactly the calibration the tool exists for. Measured on
+this machine at the time of the fix: saved zones `0.315 / 0.682` against defaults
+`0.38 / 0.62`, so the middle band was drawn covering 24% of the surface where the app
+actually used 37% — about a third too narrow.
+
+### Reading the app's settings from another binary
+
+`mb-dev` is a separate executable, so `UserDefaults.standard` is **its** domain, not
+`MagicButtons.app`'s. Loading settings the obvious way returns stock defaults and the
+"fix" changes nothing while looking correct. The suite is therefore named explicitly
+(`UserDefaults(suiteName: "com.gentleworks.MagicButtons")`), which is a hardcoded string
+tracking `PRODUCT_BUNDLE_IDENTIFIER` because the package cannot see the Xcode target.
+Verified by running it, not by reading it: the harness reports which of the two it got.
+
+### One translation, not two
+
+Parity meant the harness needed `LiveContact` → `ContactBudget` and `ButtonGesture` →
+`RecognizedGesture`, which `AppShell/AppModel` already had — privately. Copying it would
+have recreated in miniature the duplication strand 1 existed to remove, so it moved to
+**`AppCore.VisualizerFeed`** and `AppModel` now calls that too. `AppCore`'s own header
+already named this consumer pair ("the thin Xcode app target and the executable harness
+both consume"), so the dependency edge was the intended design rather than a new idea.
+
+The cost, recorded because it is a real change of character: `AppCore` was Foundation +
+CoreGraphics only, and now has `Visualizer` — and therefore SwiftUI — in its transitive
+closure. Bought for one pure file that imports no UI. A separate target would have kept
+`AppCore` headless at the price of a target, a product and a `project.yml` entry for
+~40 lines; judged not worth it, but that is the trade if it ever needs revisiting.
+
+### A viewer must not drive
+
+Two stubs keep it honest: `SilentEmitter` (posts nothing — deliberately *not* the existing
+`LoggingEmitter`, which forwards to a real `CGEventEmitter`) and `InertClickSource` (never
+installs a tap, so no Accessibility grant is needed). A viewer holding a live
+`.cghidEventTap` is the exact hazard that once wedged clicking system-wide when the grant
+was revoked, and it would buy only `requireNoPhysicalClick` fidelity — which needs a real
+hardware click to mean anything. That one difference from the running app is documented in
+`docs/13`.
