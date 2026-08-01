@@ -44,6 +44,109 @@ place without building them now.
   `SPUUpdaterDelegate.allowedChannelsForUpdater:` → `["beta"]` behind an opt-in pref;
   release-side `generate_appcast --channel beta` (a `release.sh --beta` flag). Build-number
   increments per beta, clean version string (the earlier decision).
+- **Homebrew cask** — a `brew install --cask magicbuttons` channel alongside the DMG.
+  Researched end-to-end 2026-08-01 and **deferred on cost, not on feasibility**: the cask
+  itself is written and passes `brew style`, `brew audit --cask --online` and
+  `brew livecheck` against the live appcast (Homebrew 6.0.14). It is recorded in full below
+  so none of this needs re-deriving when the blocker clears.
+
+  **The blocker is notability, and it is measured, not judged.** `brew audit --new` — the
+  submission gate for the official `homebrew/cask` repo — fails outright:
+
+  ```
+  Error: 1 problem in 1 cask detected.
+   - Forgejo repository not notable enough (<30 forks, <30 watchers and <75 stars)
+  ```
+
+  Homebrew queries Codeberg/Forgejo natively, so **the host is not the problem** —
+  `gram`, `librewolf` and `openrgb` all ship from `codeberg.org` URLs today. The repo is at
+  1 star / 0 forks / 1 watcher. Note the audit's message understates the bar that actually
+  applies: `Package-Acceptance-Policy.md` §Notability sets **30 forks / 30 watchers /
+  75 stars** in general but **90 / 90 / 225 for a self-submission by the repository owner**,
+  which is what a submission from here would be. Two documented routes in besides the
+  metrics: a maintainer/prolific-contributor submission, or "substantial, independently
+  verifiable public interest and multiple requests for inclusion" — i.e. **demand to point
+  at is itself the qualification**, which is the argument for waiting rather than pushing.
+
+  **Nothing in the release pipeline needs to change.** Homebrew's `:sparkle` livecheck
+  strategy reads the existing appcast, takes `shortVersionString` + `version` and joins them
+  as `1.1.2,5` (`bundle_version.rb#nice_version`) — which maps straight onto the
+  `MagicButtons-1.1.2-5.dmg` / `v1.1.2-5` naming via `version.csv.first`/`.second`. Verified:
+  `brew livecheck` resolves the published feed to exactly the declared version. The Codeberg
+  Release asset is byte-identical to `updates/`, so the `sha256` can be taken from the local
+  DMG at cut time without a re-download.
+
+  **Why this needs a second repo, which is why it's deferred.** A tap is the *only*
+  third-party mechanism — brew 6 rejects both a loose file and a URL:
+
+  ```
+  $ brew info --cask ./magicbuttons.rb
+  Error: Homebrew requires casks to be in a tap, rejecting: ...
+  $ brew info --cask http://localhost:8731/magicbuttons.rb
+  Error: Cask 'magicbuttons' is unavailable: No Cask with this name exists.
+  ```
+
+  And the tap cannot just be a `Casks/` directory in *this* repo. `brew tap` is a plain
+  `git clone` with no `--depth` and no `--single-branch` (`tap.rb:708-719`), checked out at
+  the repo's **default branch** — which on origin is `pages`, not `main`. So tapping this
+  repo would hand brew a checkout with no `Casks/` in it, and every taper would pull the
+  `pages` branch as well: **12.3 MB today against 0.9 MB for `main`**, growing by roughly one
+  DMG (~3 MB) per release, permanently, since git keeps the blobs after a delete. A separate
+  `homebrew-magicbuttons` repo is a few KB that stays a few KB.
+
+  **Decision (2026-08-01): hold.** The gain is discoverability and scriptable/dotfile
+  installs; Sparkle already handles updating and the DMG is one click. That did not justify
+  maintaining a second repo. Revisit when there is demand to point at — which, per the policy
+  above, is also what would make the official repo reachable and the tap unnecessary.
+
+  **When it is picked up**, the release-side work is one step: a `do_tap_release` after
+  `do_codeberg_release` in `scripts/release.sh` that rewrites `version` + `sha256` from the
+  DMG already on disk and pushes — the same shape as the existing `pages` worktree push, and
+  the same "channels can't drift apart" rule as docs/07 §Distribution mechanics. `auto_updates
+  true` is deliberate and gives the intended split: a plain `brew upgrade` leaves the app
+  alone and lets Sparkle own updates, while `brew upgrade --greedy` picks it up.
+
+  The cask as validated — `version`/`sha256` are a snapshot of 1.1.2 (5) and must be
+  refreshed to the then-current build:
+
+  ```ruby
+  cask "magicbuttons" do
+    version "1.1.2,5"
+    sha256 "0288c64355ddae6cf04c7beb572c4eb18526713b6837c317dabc57f9be1cedbc"
+
+    url "https://codeberg.org/anguiano/MagicButtons/releases/download/v#{version.csv.first}-#{version.csv.second}/MagicButtons-#{version.csv.first}-#{version.csv.second}.dmg"
+    name "MagicButtons"
+    desc "Middle button and tap-to-click for the Apple Magic Mouse"
+    homepage "https://codeberg.org/anguiano/MagicButtons"
+
+    livecheck do
+      url "https://anguiano.codeberg.page/MagicButtons/appcast.xml"
+      strategy :sparkle
+    end
+
+    auto_updates true
+    depends_on macos: :sonoma
+
+    app "MagicButtons.app"
+
+    uninstall quit:       "com.gentleworks.MagicButtons",
+              login_item: "MagicButtons"
+
+    zap trash: [
+      "~/Library/Caches/com.gentleworks.MagicButtons",
+      "~/Library/HTTPStorages/com.gentleworks.MagicButtons",
+      "~/Library/Logs/MagicButtons",
+      "~/Library/Preferences/com.gentleworks.MagicButtons.plist",
+    ]
+  end
+  ```
+
+  Two details that cost a machine check rather than a guess: `depends_on macos: :sonoma`
+  is the minimum-version form (`>= :sonoma` is a `brew style` offence, autocorrected to
+  this), and the four `zap` paths are the ones the app is actually observed to create —
+  `HTTPStorages` is Sparkle's, and there is no `Application Support` or
+  `Saved Application State` directory to reclaim.
+
 - **Suppress physical clicks (Feature A)** — optionally consume the hardware
   left/right click so tap-to-click *replaces* rather than *adds*. Mechanism already
   anticipated: the `EventInterceptor` active tap flips from pass-through to consuming.
