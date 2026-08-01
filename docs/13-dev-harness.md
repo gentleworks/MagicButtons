@@ -116,11 +116,11 @@ You normally won't need it.
 
 **`visualize [sim]`** — Opens a live window drawing contact patches over the three zone
 bands, fed from the real mouse. Great for *seeing* what the recognizer sees — and since
-1.1.4 that is literal: it runs the **real `AppCoordinator`** on **your saved settings**,
+1.1.3 that is literal: it runs the **real `AppCoordinator`** on **your saved settings**,
 so you get the travel-budget rings, the gesture badges and the spoken readout exactly as
 the app draws them, at your own calibrated zone boundaries.
 
-Before 1.1.4 it built a bare model on *default* zones with no recognizer behind it, so it
+Before 1.1.3 it built a bare model on *default* zones with no recognizer behind it, so it
 drew contacts only — and drew the bands in the wrong place for anyone who had calibrated
 (`docs/06`'s whole point is that the picture and the behaviour can never disagree).
 

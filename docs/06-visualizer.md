@@ -58,7 +58,7 @@ still drives the picture, just without rings.
 
 The translation itself lives in **`AppCore.VisualizerFeed`**, in one copy, because there
 are two consumers: `AppShell/AppModel` and the `mb-dev visualize` harness. It was private
-to `AppModel` until 1.1.4, which is why the harness had no rings or badges at all — it had
+to `AppModel` until 1.1.3, which is why the harness had no rings or badges at all — it had
 no way to speak the recognizer's language. `AppCore` takes a `Visualizer` dependency for
 that one file; the translation is pure and imports no UI.
 
