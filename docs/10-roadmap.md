@@ -61,7 +61,6 @@ place without building them now.
   the work was *estimated* as, and both estimates missed in instructive ways: strand 2 set
   out to draw the gate and ended up correcting it, and strand 3's named risk (announcement
   flooding) turned out less dangerous than the one nobody wrote down (announcement *scope*).
-  **One question survives all three — high-water vs current displacement, under strand 2.**
   1. **Feed the visualizer from the interpreting machinery. — DONE.** Per-contact accumulation
      (distance from the `.began` origin) is currently implemented **twice** —
      `MouseGestureRecognizer.swift:163` and `ContactMetrics.swift:219`, the latter
@@ -97,16 +96,6 @@ place without building them now.
      someone whose hands shake, and it is a slider for anyone who wants it tighter.
      Revisit from use, not from theory.
 
-     **Remaining travel question, narrowed:** high-water vs current displacement. For a
-     *tap* the two coincide in practice — 180 ms is not long enough to drift past the
-     ring and settle back — so the tap gate needs no change. The gap only opens in
-     **`pressAndHold` promotion** (`MouseGestureRecognizer.swift:248`), which re-checks
-     the ratcheting high-water every frame: the contact patch grows under a firm press,
-     dragging the centroid out, and *reverses* when the patch shrinks (docs/04). So a
-     press can spend its budget on patch growth alone and stay permanently disqualified
-     from becoming a drag even after it settles still. Judging that guard on current
-     displacement instead would let it promote once settled. Not decided; wants a
-     `log-gestures` session rather than an argument.
   3. **The visualizer for users who can't see it — DONE** (docs/06 §The spoken readout,
      docs/14). The estimate held for the code and was wrong about which design problem
      bites. The predicted one — flooding `AccessibilityNotification.Announcement` — is

@@ -885,11 +885,6 @@ own rule, and to survive the other's.
 ### Still open
 
 - **Strand 3**, the non-visual representation. *(Done next — see below.)*
-- **High-water vs current displacement**, narrowed: for a *tap* the two coincide in
-  practice (180 ms is too short to drift out and settle back), so the tap gate needs no
-  change. The gap only opens in `pressAndHold` promotion, which re-checks the ratcheting
-  value every frame — patch growth alone can disqualify a press that then settles still.
-  Wants a `log-gestures` session, not an argument.
 - **Duration calibration**, unrelated but noticed: four short contacts ran 0.150 / 0.180 /
   0.255 / 0.300 s against `maxDuration` 0.18.
 

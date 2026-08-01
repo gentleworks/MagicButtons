@@ -20,8 +20,11 @@ and the behavior can never disagree.
   `maxTravelMM`, plus a live ring at the contact's current displacement, so you can
   see how close a tap is to being rejected as a drag. The budget latches solid red
   once the high-water passes it, and the inner ring disappears — that trip is what
-  explains the dashed circle without a caption. See docs/10 §Visualizer for why the
-  drawn ring is *displacement* while the *high-water* decides.
+  explains the dashed circle without a caption. The drawn ring is *displacement* while
+  the *high-water* decides, because a ring that only ratchets can never show what the
+  threshold feels like as you approach it; both cross the boundary at the same instant,
+  since the high-water is set by that very value (docs/14 §What the drawing had to learn
+  from being looked at).
 - The **active zone** highlighted when a finger is present (using `ZoneMapper`
   with hysteresis so it doesn't strobe at boundaries).
 - A **gesture badge** naming the zone and gesture when one registers, auto-clearing
