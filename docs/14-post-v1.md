@@ -882,12 +882,6 @@ The tests now drive every frame **but** the `.ended` one and assert the drag is 
 and still tracked before the lift. Each was verified to fail under a mutation targeting its
 own rule, and to survive the other's.
 
-### Still open
-
-- **Strand 3**, the non-visual representation. *(Done next — see below.)*
-- **Duration calibration**, unrelated but noticed: four short contacts ran 0.150 / 0.180 /
-  0.255 / 0.300 s against `maxDuration` 0.18.
-
 ## Visualizer: the spoken readout ✅ *(strand 3; done; HW VoiceOver-verified 2026-07-31; 271 tests)*
 
 Strand 3 of `10-roadmap.md` §Visualizer — the picture, for someone who can't see it. The
