@@ -86,13 +86,13 @@ place without building them now.
   Error: Cask 'magicbuttons' is unavailable: No Cask with this name exists.
   ```
 
-  And the tap cannot just be a `Casks/` directory in *this* repo. `brew tap` is a plain
-  `git clone` with no `--depth` and no `--single-branch` (`tap.rb:708-719`), checked out at
-  the repo's **default branch** — which on origin is `pages`, not `main`. So tapping this
-  repo would hand brew a checkout with no `Casks/` in it, and every taper would pull the
-  `pages` branch as well: **12.3 MB today against 0.9 MB for `main`**, growing by roughly one
-  DMG (~3 MB) per release, permanently, since git keeps the blobs after a delete. A separate
-  `homebrew-magicbuttons` repo is a few KB that stays a few KB.
+  And a `Casks/` directory in *this* repo would make a poor tap. `brew tap` is a plain
+  `git clone` with no `--depth` and no `--single-branch` (`tap.rb:708-719`), so everyone who
+  taps clones **every branch** — `pages` included, which carries the published DMGs and
+  deltas: **12.3 MB today against 0.9 MB for `main`**, growing by roughly one DMG (~3 MB) per
+  release, permanently, since git keeps the blobs after a delete. The checkout itself would
+  be fine — `main` is the default branch and would hold the `Casks/` — but the download would
+  not. A separate `homebrew-magicbuttons` repo is a few KB that stays a few KB.
 
   **Decision (2026-08-01): hold.** The gain is discoverability and scriptable/dotfile
   installs; Sparkle already handles updating and the DMG is one click. That did not justify
