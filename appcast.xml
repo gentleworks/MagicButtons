@@ -3,6 +3,34 @@
     <channel>
         <title>MagicButtons</title>
         <item>
+            <title>1.1.3</title>
+            <pubDate>Sat, 01 Aug 2026 13:47:14 -0700</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[The visualizer shows your finger the way the mouse actually sees it. Each contact is drawn at its real size and angle instead of as a same-sized dot, so it grows as you press and turns as you roll — and it now scales with the window instead of staying a fixed blob.
+
+The visualizer also shows how much room a tap has left. A dashed circle marks how far your finger may drift and still count as a tap, and a second ring tracks where your finger is right now, growing and shrinking as you move. Go too far and the dashed circle turns solid red — that's the moment the tap stopped counting. It's the quickest way to see what "Max tap travel" in Advanced actually means before you change it.
+
+Taps now get the same amount of room to wobble in every direction. The limit used to be measured on the mouse's own grid, which is taller than it is wide — so a tap could slide noticeably further front-to-back than side-to-side before it stopped counting, even though a fingertip rolls sideways just as easily. "Max tap travel" in Advanced is now set in millimetres, and the visualizer draws it as a circle you can watch your finger move inside. If you'd tuned that slider, your setting carries over.
+
+MagicButtons now speaks Spanish. The menu, Settings, the visualizer, and every status and error message follow your Mac's language, and numbers, times, and durations are formatted the way your region writes them.
+
+MagicButtons now works with VoiceOver. The Advanced sliders say what they are and where they're set, the Status pane says whether Accessibility is granted, and the menu-bar icon announces MagicButtons by name — along with what needs attention when something does. In the visualizer, the gesture badge now names the zone a gesture fired in instead of relying on colour alone, and its text is easier to read; contact dots have a clearer outline. If you use Reduce Motion, the badge fades in rather than scaling up.
+
+The visualizer now speaks, so you can set your zones up without seeing it. Rest a finger on the mouse and it tells you which zone you're in; tap, double-tap or hold and it tells you what registered and where — which is the part you want while you're moving the Advanced sliders and your VoiceOver cursor is on the slider, not the picture. Brief taps don't announce where they landed, only what they were, so trying a few in a row stays quick to listen to, and lifting your finger says nothing at all. You'll only hear it while the visualizer or Settings window is the one you're in front of — using your mouse anywhere else stays silent. Landing on the picture itself reads out the current zone and how many fingers are down.
+
+MagicButtons has a new home at codeberg.org/gentleworks/MagicButtons. The Homepage link in About points there, and updates now come from the new address. There's nothing to do on your end — this version already knows where to look.
+]]></description>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.3-6.dmg" length="3194963" type="application/octet-stream" sparkle:edSignature="KZwDx4ELPTjI0w0dOMYrZUSTOh9eu5snwA1xQg8JyxUAUabSASKeMojV64hbOXg9v96B57IzXtgBUu8JneKVDw=="/>
+            <sparkle:deltas>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-5.delta" sparkle:deltaFrom="5" length="345138" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="4SN0/N44OmtmduJTU2d268PD1+ob1V11casBZC5kT6OifgG4tFzBY2L/9HMd32Rn+FgNg8ddHMtXbKMH0zZ4Dw=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-4.delta" sparkle:deltaFrom="4" length="359722" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="+NzSJW4VKqt0X0kLKOJHxL0veA5c4BVMsxiPXSj9GljueL9DlCPovsLb8xeQhRHosK/ubPswuZ0wAr6VcL7rCA=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-3.delta" sparkle:deltaFrom="3" length="424990" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Aa2iIg6lm9/9Cxl8eG2drXUvmo8Y8Ur5TIUwkZyywd2LmyS4VisBFMkHISRgMxAtltfSvuujg/pzGoQIp9wmCQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-2.delta" sparkle:deltaFrom="2" length="428118" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="iHfCv2GphBivt/YxyaR8p8BNOoFyKThAQp93uh136awkZXkGHlwhE9bR7fjMp+phnPRwXy/lCRKpUFUEJwxnBg=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.1.2</title>
             <pubDate>Sat, 25 Jul 2026 22:56:37 -0700</pubDate>
             <sparkle:version>5</sparkle:version>
@@ -70,17 +98,6 @@ project and response times may be long and inconsistent.
             <sparkle:deltas>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-3.delta" sparkle:deltaFrom="3" length="248318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="hTZCQLCKY/sggBmS6RPE67ueJWwKIVY7BU5Sn0E7s+b+gLp2OkJEdGiIMbGX9X3WkHhIBOrh1fa1/Wuvvs+9AQ=="/>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-2.delta" sparkle:deltaFrom="2" length="254734" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ee/vv17xUvEZ0ikq4UqaZFSflcyjPWYWncGn1jD9Wp+dbP7axyRLTdEH92k+7tV2APp1dbWwN/zl3e60dnr7BQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.1.0</title>
-            <pubDate>Wed, 15 Jul 2026 14:00:27 -0700</pubDate>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.0-3.dmg" length="2755047" type="application/octet-stream" sparkle:edSignature="arTGPwRrsWmvxfvoq1Z+KcRsuLmP91ckJeTlV7w0NvXukTuIWNA3cvspzgQTvi22qVNX6X5t43Ar0NetqawuAg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons3-2.delta" sparkle:deltaFrom="2" length="19334" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="MLDT/dMhKERnSjmFWpSuJD3TT1aoRK+S0EnhcXPqB1VVm4+Mksdt/FPfY97V6UxsJ7taJHUdEKdr47oJ1XaLDA=="/>
             </sparkle:deltas>
         </item>
     </channel>
