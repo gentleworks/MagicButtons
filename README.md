@@ -7,12 +7,8 @@ and **tap-to-click for left / middle / right** to the Apple Magic Mouse, plus a
 [**Download the latest release**](https://codeberg.org/gentleworks/MagicButtons/releases/latest) · macOS 14+ · Swift 6 · SwiftPM libraries + Xcode app ·
 MIT · open source.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/visualizer-panels-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/visualizer-panels-light.png">
-  <img src="docs/images/visualizer-panels-light.png"
-       alt="Four views of the MagicButtons visualizer, each an outline of the Magic Mouse divided into left, middle and right zones. In turn: a tap in the left zone, a tap in the middle zone, a double-tap in the middle zone, and a hold in the right zone. In each, the finger contact is drawn as an ellipse at its true size and angle, the zone it landed in is highlighted, and a badge names the gesture and zone.">
-</picture>
+![Four views of the MagicButtons visualizer, each an outline of the Magic Mouse divided into left, middle and right zones. In turn: a tap in the left zone, a tap in the middle zone, a double-tap in the middle zone, and a hold in the right zone. In each, the finger contact is drawn as an ellipse at its true size and angle, the zone it landed in is highlighted, and a badge names the gesture and zone.](docs/images/visualizer-panels-dark.png#gh-dark-mode-only)
+![Four views of the MagicButtons visualizer, each an outline of the Magic Mouse divided into left, middle and right zones. In turn: a tap in the left zone, a tap in the middle zone, a double-tap in the middle zone, and a hold in the right zone. In each, the finger contact is drawn as an ellipse at its true size and angle, the zone it landed in is highlighted, and a badge names the gesture and zone.](docs/images/visualizer-panels-light.png#gh-light-mode-only)
 
 *The built-in visualizer, in real time: every contact drawn at the size and angle the
 mouse actually reports, the active zone highlighted, and each recognized gesture named
