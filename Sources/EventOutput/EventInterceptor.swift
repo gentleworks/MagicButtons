@@ -197,8 +197,9 @@ public final class EventInterceptor {
     public func endDragPromotion() { dragZone = nil }
 
     /// Rewrite a physical `mouseMoved` into the held button's `…MouseDragged` in place
-    /// (same location/deltas, retagged type + button number). No-op unless a drag is
-    /// armed and `type` is `mouseMoved`. Returns whether it rewrote (for tests).
+    /// (same location/deltas, retagged type + button number, stamped with the button
+    /// state a real drag carries). No-op unless a drag is armed and `type` is
+    /// `mouseMoved`. Returns whether it rewrote (for tests).
     @discardableResult
     func applyDragPromotion(type: CGEventType, event: CGEvent) -> Bool {
         guard let dragZone, type == .mouseMoved else { return false }
@@ -206,6 +207,21 @@ public final class EventInterceptor {
         event.setIntegerValueField(
             .mouseEventButtonNumber,
             value: Int64(ButtonMapping.button(for: dragZone).rawValue))
+        // Retyping alone is not enough. A `mouseMoved` carries no button state of its
+        // own — it carries *residue* from the last real click sequence, so these fields
+        // are stale rather than merely zero (a capture showed the same code path emit
+        // clickState 1 and clickState 0 drags minutes apart, and a `mouseMoved` carrying
+        // clickState 1 before any click in the recording). Hardware drags carry
+        // clickState 1 and pressure 1.0 throughout, so stamp both to match the
+        // button-down this promotion belongs to. Without it the app sees a "drag" that
+        // claims no button is down and belongs to no click sequence.
+        event.setIntegerValueField(.mouseEventClickState, value: Self.dragClickState)
+        event.setDoubleValueField(.mouseEventPressure, value: 1.0)
         return true
     }
+
+    /// The click-count a promoted drag reports. `1` because `CGEventEmitter.press`
+    /// always opens a hold with a single-click down; if double-click-drag (docs/10)
+    /// ever lands, this and that down have to move together.
+    static let dragClickState: Int64 = 1
 }

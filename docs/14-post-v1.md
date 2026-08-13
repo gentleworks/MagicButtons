@@ -1109,3 +1109,69 @@ installs a tap, so no Accessibility grant is needed). A viewer holding a live
 was revoked, and it would buy only `requireNoPhysicalClick` fidelity — which needs a real
 hardware click to mean anything. That one difference from the running app is documented in
 `docs/13`.
+
+## Synthetic drags read as clicks in Pages/Numbers — a wrong `clickState` on the up
+
+Text selected by a MagicButtons drag collapsed the instant the finger lifted, dropping the
+caret where the release happened. Reported against Pages and Numbers; both drag styles;
+never observed in other apps.
+
+### The measurement that found it
+
+Theory was worthless here — the first hypothesis (a stray tap emitted by the shell
+re-registering the finger as it leaves, which would put a `click` right after `holdEnded`)
+was wrong, and the user's objection to it was the right one: a spurious click on every drag
+release would wreck far more than a text selection. The capture killed it outright — after
+every drag-ending up the next event is a plain `moved`, on all seven drags.
+
+What settled it was a **passive listen-only tap tail-appended to the session tap**, which
+sees events as the target app receives them (after our own HID-tap rewrite). Two captures:
+one of MagicButtons drags, one intended as all-physical. The second is what cracked it —
+it contained nine drags, of which **three were synthetic** (the app fired where the user
+believed they were clicking physically), and the reported collapses were exactly those
+three. 100% of synthetic drags, 0% of physical. There was never an intermittency and never
+a second Pages bug; the "sometimes it happens with a physical drag too" was this app.
+
+The lesson is the one `docs/06` already records in a different key: *draw it faithfully and
+the bug shows*. The instrument that mattered logged raw `CGEvent` fields — `clickState`,
+`pressure`, `eventNumber` — rather than gestures, because the defect was in fields the
+gesture-level logs never carried.
+
+### What hardware sends, and what we sent
+
+| | down | dragged | up |
+|---|---|---|---|
+| **Physical** (event numbers 2486–2493) | cs 1, p 1.00 | cs 1, p 1.00 | cs **0**, p 0.00 |
+| **Synthetic** (before the fix) | cs 1, p 1.00 | cs **0**, p **0.00** | cs **1**, p 0.00 |
+
+Our button-*down* was already a perfect match. Two things were not:
+
+1. **The up carried `clickState 1` where hardware sends `0`.** macOS marks a
+   drag-terminating up as "no click happened here". Announcing 1 declares a fresh single
+   click at the release point — collapse the selection, plant the caret. Fixed in
+   `CGEventEmitter.release`. `click` is deliberately untouched: a real click's up carries
+   its count, and that is what makes double- and triple-click select a word and a line.
+2. **Promoted drags carried stale button state.** `applyDragPromotion` retyped the event
+   and rewrote the button number, nothing else — and a `mouseMoved` does not carry zeroes,
+   it carries *residue* from the last real click sequence. The same code path emitted
+   `cs 1` and `cs 0` drags minutes apart in one capture, and a `moved` arrived carrying
+   `cs 1` before any click in the recording. Now stamped to `cs 1` / `p 1.0`.
+
+### Why only iWork
+
+AppKit's own text views track selection in a modal `nextEventMatchingMask:` loop that reads
+only the event *type*, so TextEdit never saw any of this. iWork uses its own engine and
+correlates the events itself. That is inference about closed-source code and is not load
+bearing — the field mismatch against measured hardware is reason enough to fix regardless
+of which consumer noticed.
+
+### Still outstanding: `eventNumber`
+
+The third mismatch is **not fixed** and is kept as a future target. Hardware gives every
+event in one click sequence a shared, incrementing `eventNumber` (2486, 2487, …); every
+event we synthesize carries **0**. It is not load-bearing for the click path — synthetic
+single, double, and triple clicks all work with 0 — so it was left alone rather than faked
+alongside a change that already had a measured justification. If a drag-correlation bug
+ever surfaces in an app that matches an up to its down by event number, this is the first
+thing to try. Faking it is not free: event numbers are expected to be unique and
+monotonic, so a synthesized one wants its own thought about what it collides with.

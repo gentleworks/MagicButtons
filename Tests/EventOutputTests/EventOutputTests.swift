@@ -144,6 +144,100 @@ import TouchKit
         #expect(!interceptor.applyDragPromotion(type: .mouseMoved, event: event))
         #expect(event.type == .mouseMoved)
     }
+
+    /// A promoted move must carry the button state a hardware drag carries. The seeded
+    /// values are the point: a `mouseMoved` arrives holding *residue* from the last real
+    /// click sequence, not zeroes, so the rewrite has to overwrite rather than fill in.
+    /// Measured reference — every physical drag in a Pages capture: clickState 1,
+    /// pressure 1.0, on every dragged event.
+    @Test func promotedDragCarriesHeldButtonState() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        let event = mouseMoved()
+        event.setIntegerValueField(.mouseEventClickState, value: 3)
+        event.setDoubleValueField(.mouseEventPressure, value: 0.25)
+
+        #expect(interceptor.applyDragPromotion(type: .mouseMoved, event: event))
+        #expect(event.type == .leftMouseDragged)
+        #expect(event.getIntegerValueField(.mouseEventClickState) == 1)
+        #expect(event.getDoubleValueField(.mouseEventPressure) == 1.0)
+    }
+
+    /// The un-armed path must not launder the residue either: an untouched move keeps
+    /// whatever it arrived with, so the assertion above can only pass via the rewrite.
+    @Test func unarmedMoveKeepsItsOwnFieldsUntouched() {
+        let interceptor = EventInterceptor()
+        let event = mouseMoved()
+        event.setIntegerValueField(.mouseEventClickState, value: 3)
+        event.setDoubleValueField(.mouseEventPressure, value: 0.25)
+        // Pressure is stored as a byte, so read back what was actually kept rather than
+        // what was written (0.25 → 63/255). The point is that it is *unchanged*.
+        let seededPressure = event.getDoubleValueField(.mouseEventPressure)
+
+        #expect(!interceptor.applyDragPromotion(type: .mouseMoved, event: event))
+        #expect(event.getIntegerValueField(.mouseEventClickState) == 3)
+        #expect(event.getDoubleValueField(.mouseEventPressure) == seededPressure)
+    }
+}
+
+/// The click-state stamped on what we actually post (docs/05 §Press/release). These are
+/// the fields that made a synthetic drag readable as a drag rather than as a click, so
+/// they are asserted on the real emitter through an injected sink rather than inferred.
+@Suite struct EmittedClickStateTests {
+    /// Drives a trusted emitter and collects every event it posts.
+    private func capturing() -> (CGEventEmitter, Capture) {
+        let capture = Capture()
+        let emitter = CGEventEmitter(isTrusted: { true }, postEvent: { capture.events.append($0) })
+        return (emitter, capture)
+    }
+
+    final class Capture { var events: [CGEvent] = [] }
+
+    /// The regression this suite exists for. A drag-terminating up carrying clickState 1
+    /// reads as a fresh single click at the release point — it collapsed text selections
+    /// in Pages/Numbers on 100% of synthetic drags. Hardware sends 0.
+    @Test func dragTerminatingUpReportsNoClick() {
+        let (emitter, capture) = capturing()
+        emitter.press(.left)
+        emitter.release(.left)
+
+        #expect(capture.events.count == 2)
+        let down = capture.events[0], up = capture.events[1]
+        #expect(down.type == .leftMouseDown)
+        #expect(down.getIntegerValueField(.mouseEventClickState) == 1)
+        #expect(up.type == .leftMouseUp)
+        #expect(up.getIntegerValueField(.mouseEventClickState) == 0)
+    }
+
+    /// The other half of the rule: a *click*'s up keeps its count. This is what makes
+    /// double-click select a word and triple-click select a line, so zeroing every up
+    /// would fix the drag and break the clicks.
+    @Test func clickUpKeepsItsCount() {
+        for count in 1...3 {
+            let (emitter, capture) = capturing()
+            emitter.click(.left, count: count)
+
+            #expect(capture.events.count == 2)
+            for event in capture.events {
+                #expect(event.getIntegerValueField(.mouseEventClickState) == Int64(count))
+            }
+        }
+    }
+
+    /// Every synthesized event stays tagged, so the interceptor can still tell our own
+    /// posts from hardware — the clickState change must not disturb that.
+    @Test func postedEventsCarryTheSyntheticMarker() {
+        let (emitter, capture) = capturing()
+        emitter.click(.middle, count: 1)
+        emitter.press(.right)
+        emitter.release(.right)
+
+        #expect(capture.events.count == 4)
+        for event in capture.events {
+            #expect(event.getIntegerValueField(.eventSourceUserData)
+                    == CGEventEmitter.syntheticMarker)
+        }
+    }
 }
 
 /// Click/drag de-confliction (docs/14), chosen approach **(c) balanced-swallow**: a

@@ -30,9 +30,28 @@ public final class CGEventEmitter: ButtonEmitting {
     /// would retain the tap. `nil` in tests (a spy drives the pipeline directly).
     public weak var dragPromoter: (any DragPromoting)?
 
-    public init(isTrusted: @escaping () -> Bool = { AXIsProcessTrusted() }) {
+    /// Where a fully-built event goes. Injected for the same reason as `isTrusted`:
+    /// the real destination is `.cghidEventTap`, which a test can neither observe nor
+    /// safely drive, so the exact fields we stamp would otherwise be unassertable.
+    private let postEvent: (CGEvent) -> Void
+
+    /// The shipping initializer, and the only one visible outside this module. Every
+    /// production call site uses it; the destination is always `.cghidEventTap`.
+    public convenience init(isTrusted: @escaping () -> Bool = { AXIsProcessTrusted() }) {
+        self.init(isTrusted: isTrusted, postEvent: { $0.post(tap: .cghidEventTap) })
+    }
+
+    /// Deliberately **internal** — reached by tests through `@testable import`, and by
+    /// nothing else. The sink has to be substitutable for the posted fields to be
+    /// assertable at all (`clickState` on a drag-terminating up is the whole point of
+    /// `EmittedClickStateTests`), but it must not be substitutable from outside: a sink
+    /// that silently dropped events would present as the app having stopped working,
+    /// with no error anywhere to say so. Keeping it off the public API means that
+    /// failure mode cannot be introduced by a caller.
+    init(isTrusted: @escaping () -> Bool, postEvent: @escaping (CGEvent) -> Void) {
         source = CGEventSource(stateID: .hidSystemState)
         self.isTrusted = isTrusted
+        self.postEvent = postEvent
     }
 
     public func click(_ zone: MouseZone, count: Int) {
@@ -62,7 +81,17 @@ public final class CGEventEmitter: ButtonEmitting {
         // already released. A `release` with nothing held (e.g. `press` bailed on
         // trust) is simply a no-op.
         guard let target = heldZone else { return }
-        post(ButtonMapping.upType(for: target), zone: target, clickState: 1)
+        // clickState **0**, not 1 — the one field that separated our drags from the
+        // hardware's. macOS marks a drag-terminating up as "no click happened here":
+        // every physical drag in a Pages capture ended with clickState 0 while its down
+        // carried 1. Sending 1 announces a fresh single click at the release point,
+        // which is exactly what collapsed a Pages/Numbers text selection and dropped the
+        // caret where the finger lifted — 100% of synthetic drags, 0% of physical ones.
+        // Engines that track selection in a modal `nextEventMatchingMask:` loop (AppKit's
+        // own text views) only read the event *type* and never saw it; iWork's does.
+        // `click` is deliberately untouched: a real click's up carries its count, and
+        // that is what makes double- and triple-click select a word and a line.
+        post(ButtonMapping.upType(for: target), zone: target, clickState: 0)
         dragPromoter?.endDragPromotion()
         heldZone = nil
     }
@@ -79,6 +108,6 @@ public final class CGEventEmitter: ButtonEmitting {
         ) else { return }
         event.setIntegerValueField(.mouseEventClickState, value: Int64(clickState))
         event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
-        event.post(tap: .cghidEventTap)
+        postEvent(event)
     }
 }

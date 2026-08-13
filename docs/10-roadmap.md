@@ -269,6 +269,15 @@ and were consciously left for later. Kept here so they aren't lost.
   longstop that force-releases a synthetic hold after some maximum. Guard-on-trusted +
   release-on-device-loss (`14-post-v1.md` §Stuck-button hardening) cover the realistic
   strand paths, so this stays optional unless a new strand case appears.
+- **Synthetic events carry `eventNumber` 0** — hardware gives every event in one click
+  sequence a shared, incrementing number (a capture showed 2486, 2487, …); everything we
+  post carries 0. Measured, real, and **left unfixed on purpose**: it is not load-bearing
+  for the click path (synthetic single/double/triple all work), so it was not faked
+  alongside the `clickState` fix that did have a measured justification
+  (`14-post-v1.md` §Synthetic drags read as clicks). First thing to try if an app ever
+  mis-correlates a synthetic drag — matching an up to its down by event number is the
+  plausible way that would show up. Not free: event numbers are expected unique and
+  monotonic, so a synthesized one needs thought about what it collides with.
 
 ## Seams v1 deliberately leaves for the above
 
