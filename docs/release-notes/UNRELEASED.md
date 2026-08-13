@@ -8,6 +8,3 @@ published notes live with the build, not here. Deliberately not version-named: t
 reads the version from the build, and a version in the filename would assert a release
 that hasn't happened. See docs/07 §Release notes.
 -->
-
-- Fixed an issue with selecting text by dragging in Pages and Numbers, and likely other
-  applications: the selection collapsed when you lifted your finger.
