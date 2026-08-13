@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import ApplicationServices
 import TouchKit
 import TouchTestSupport
 import MultitouchAdapter
@@ -87,6 +88,22 @@ func printUsage() {
                             Prints the worst frame gap while in contact and a
                             timeout recommendation (default 20s). Needs a Magic
                             Mouse; no Accessibility required (reads only).
+
+      log-events [seconds] [path]
+                            Log the raw CGEvent stream as the TARGET APP receives
+                            it — type, source (ours vs hardware), location,
+                            clickState, pressure, eventNumber, button, deltas — to
+                            a CSV. A listen-only tap tail-appended to the session
+                            tap, so it observes events downstream of our own
+                            rewrite; filters, posts and modifies nothing. Runs of
+                            moves/drags collapse to first + count + last so the
+                            transitions stay readable. This is the instrument for
+                            "our synthetic input behaves differently from a real
+                            mouse": reproduce the same gesture synthetically and
+                            physically, then diff the field columns. The
+                            gesture-level logs above do not carry these fields
+                            (default 30s). Needs Accessibility; runs alongside the
+                            app rather than replacing it.
 
     The commands that post clicks need Accessibility permission for the running
     binary (System Settings → Privacy & Security → Accessibility). See docs/05, docs/07.
@@ -796,6 +813,236 @@ func runScaffold() {
         + "pending modules: \(pendingModules.joined(separator: ", "))")
 }
 
+// MARK: - log-events (raw CGEvent stream as the target app sees it)
+
+/// Records the raw `CGEvent` field stream — the instrument that found the Pages/Numbers
+/// drag-collapse bug (docs/14 §Synthetic drags read as clicks). Everything else in this
+/// harness logs at the *gesture* level; none of it carries `clickState`, `pressure` or
+/// `eventNumber`, which is where that whole class of defect lives.
+///
+/// The tap is **listen-only** and **tail-appended to the session tap**, two deliberate
+/// choices. Listen-only means it cannot alter or drop anything, so it is safe to leave
+/// running against the real app (unlike `log-conflicts`, this does not replace the app —
+/// run both). Tail-appending to the *session* tap puts it downstream of the app's own
+/// `.cghidEventTap` rewrite, so what it records is what the target application actually
+/// receives, our move→drag promotion included. Reading a synthetic event and a hardware
+/// one out of the same file is the entire point: diff the columns.
+///
+/// Runs of moves/drags are collapsed to first + count + last. A 30-second session is tens
+/// of thousands of move events, and the interesting rows are always the transitions.
+@MainActor
+func runLogEvents(secondsArg: String?, pathArg: String?) -> Int32 {
+    let seconds = TimeInterval(secondsArg ?? "30") ?? 30
+
+    guard AXIsProcessTrusted() else {
+        print("Accessibility not granted to this binary — a tap can't be created.")
+        print("Grant it in System Settings → Privacy & Security → Accessibility, then rerun.")
+        return 1
+    }
+
+    let path: String = pathArg ?? {
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
+        return "events-\(f.string(from: Date())).csv"
+    }()
+
+    let recorder = EventStreamRecorder()
+    guard recorder.start() else {
+        print("error: could not create the event tap.")
+        return 1
+    }
+    defer { recorder.stop() }
+
+    print("Logging the raw event stream for \(Int(seconds))s → \(path)")
+    print("Reproduce the same gesture BOTH ways — synthetically and with a physical click —")
+    print("then diff the clickState/pressure/eventNumber columns between the two.\n")
+
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    }
+    let rows = recorder.finish()
+
+    do {
+        try rows.joined(separator: "\n").appending("\n")
+            .write(toFile: path, atomically: true, encoding: .utf8)
+    } catch {
+        print("error: could not write \(path): \(error)")
+        return 1
+    }
+
+    print("\n── event stream ────────────────────────────────────")
+    print("rows:      \(rows.count - 1)   (full stream in \(path))")
+    print("synthetic: \(recorder.syntheticCount) button events from this app")
+    print("physical:  \(recorder.physicalButtonCount) button events from hardware")
+    print("────────────────────────────────────────────────────")
+    return 0
+}
+
+/// Collects the stream for `log-events`. Kept out of the command body so the tap callback
+/// has one stable object to write into, and so run-collapsing is testable by inspection.
+@MainActor
+final class EventStreamRecorder {
+    private(set) var rows: [String] =
+        ["ms,type,src,x,y,clickState,pressure,eventNumber,button,dx,dy"]
+    private(set) var syntheticCount = 0
+    private(set) var physicalButtonCount = 0
+
+    private let startedAt = Date()
+    private var tap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+
+    // Collapsed run of consecutive same-kind stream events (moves/drags/scrolls).
+    private var runKind: String?
+    private var runCount = 0
+    private var runFirst: String?
+    private var runLast: String?
+
+    private static let observed: [CGEventType] = [
+        .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+        .rightMouseDown, .rightMouseUp, .rightMouseDragged,
+        .otherMouseDown, .otherMouseUp, .otherMouseDragged,
+        .mouseMoved, .scrollWheel,
+    ]
+
+    func start() -> Bool {
+        let mask = Self.observed.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        guard let tap = CGEvent.tapCreate(
+            // Tail-appended to the SESSION tap: downstream of our own HID-tap rewrite, so
+            // a promoted move is already recorded as the drag the app will see.
+            tap: .cgSessionEventTap,
+            place: .tailAppendEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: { _, type, event, refcon in
+                if let refcon {
+                    let recorder = Unmanaged<EventStreamRecorder>
+                        .fromOpaque(refcon).takeUnretainedValue()
+                    MainActor.assumeIsolated { recorder.record(type: type, event: event) }
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: refcon
+        ) else { return false }
+
+        self.tap = tap
+        let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
+        self.runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        return true
+    }
+
+    func stop() {
+        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        if let tap { CFMachPortInvalidate(tap) }
+        runLoopSource = nil
+        tap = nil
+    }
+
+    /// Flush any open run and hand back the complete CSV.
+    func finish() -> [String] {
+        flushRun()
+        return rows
+    }
+
+    private func record(type: CGEventType, event: CGEvent) {
+        let synthetic =
+            event.getIntegerValueField(.eventSourceUserData) == CGEventEmitter.syntheticMarker
+        if Self.isButtonEvent(type) {
+            if synthetic { syntheticCount += 1 } else { physicalButtonCount += 1 }
+        }
+
+        let location = event.location
+        let row = [
+            "\(Int(Date().timeIntervalSince(startedAt) * 1000))",
+            Self.name(type),
+            synthetic ? "SYNTH" : "phys",
+            String(format: "%.1f", location.x),
+            String(format: "%.1f", location.y),
+            "\(event.getIntegerValueField(.mouseEventClickState))",
+            String(format: "%.2f", event.getDoubleValueField(.mouseEventPressure)),
+            "\(event.getIntegerValueField(.mouseEventNumber))",
+            "\(event.getIntegerValueField(.mouseEventButtonNumber))",
+            "\(event.getIntegerValueField(.mouseEventDeltaX))",
+            "\(event.getIntegerValueField(.mouseEventDeltaY))",
+        ].joined(separator: ",")
+
+        // Only high-volume streams collapse; a button transition is always its own row.
+        guard Self.isStreamEvent(type) else {
+            flushRun()
+            rows.append(row)
+            return
+        }
+        let kind = Self.name(type) + (synthetic ? "/S" : "/p")
+        if kind == runKind {
+            runCount += 1
+            runLast = row
+            return
+        }
+        flushRun()
+        runKind = kind
+        runCount = 1
+        runFirst = row
+        runLast = row
+    }
+
+    private func flushRun() {
+        guard let first = runFirst else { return }
+        rows.append(first)
+        if runCount > 2, let last = runLast {
+            rows.append("# … \(runCount - 2) more \(runKind ?? "") …")
+            rows.append(last)
+        } else if runCount == 2, let last = runLast {
+            rows.append(last)
+        }
+        runKind = nil
+        runCount = 0
+        runFirst = nil
+        runLast = nil
+    }
+
+    private static func isButtonEvent(_ type: CGEventType) -> Bool {
+        switch type {
+        case .leftMouseDown, .leftMouseUp, .rightMouseDown,
+             .rightMouseUp, .otherMouseDown, .otherMouseUp:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isStreamEvent(_ type: CGEventType) -> Bool {
+        switch type {
+        case .mouseMoved, .leftMouseDragged, .rightMouseDragged,
+             .otherMouseDragged, .scrollWheel:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func name(_ type: CGEventType) -> String {
+        switch type {
+        case .leftMouseDown: return "leftDown"
+        case .leftMouseUp: return "leftUp"
+        case .leftMouseDragged: return "leftDrag"
+        case .rightMouseDown: return "rightDown"
+        case .rightMouseUp: return "rightUp"
+        case .rightMouseDragged: return "rightDrag"
+        case .otherMouseDown: return "otherDown"
+        case .otherMouseUp: return "otherUp"
+        case .otherMouseDragged: return "otherDrag"
+        case .mouseMoved: return "moved"
+        case .scrollWheel: return "scroll"
+        default: return "type\(type.rawValue)"
+        }
+    }
+}
+
 // MARK: - Dispatch
 
 // Unbuffered stdout so live logs and the countdown appear immediately even when
@@ -831,6 +1078,9 @@ case "log-conflicts":
                          pathArg: args.count > 3 ? args[3] : nil))
 case "probe-cadence":
     exit(runProbeCadence(secondsArg: args.count > 1 ? args[1] : nil))
+case "log-events":
+    exit(runLogEvents(secondsArg: args.count > 1 ? args[1] : nil,
+                      pathArg: args.count > 2 ? args[2] : nil))
 case "-h", "--help", "help":
     printUsage()
 case .none:

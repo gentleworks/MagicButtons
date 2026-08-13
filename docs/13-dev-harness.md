@@ -86,11 +86,12 @@ Enough vocabulary to read the rest of this page. Skip if it's old news.
 | `log-gestures [s] [path]` | Capture real contacts to a CSV for threshold tuning | Magic Mouse |
 | `log-conflicts [s] [tap\|hold] [path]` | When do physical clicks collide with synthetic clicks/drags? | Accessibility + Magic Mouse |
 | `probe-cadence [s]` | How continuous is the frame stream while a finger is down? | Magic Mouse |
+| `log-events [s] [path]` | What do our events look like *next to* real ones, field by field? | Accessibility |
 
 Defaults: `verify-emit` zone `middle`, count `1`; `dump-frames` and `verify-source`
 run `10s`; `verify-tap`, `verify-gesture`, `verify-two-mouse`, and `probe-cadence`
-run `20s`; `log-gestures` and `log-conflicts` run `30s` (`log-conflicts` drag style
-defaults to `tap`).
+run `20s`; `log-gestures`, `log-conflicts`, and `log-events` run `30s`
+(`log-conflicts` drag style defaults to `tap`).
 
 ### Check your setup
 
@@ -214,6 +215,34 @@ prints the worst gap and a plain-language verdict.
 *Known result:* the stream is change-driven and **does** go silent for seconds under
 a still finger — which is exactly why the app relies on the lift event, not silence,
 to end a drag (see `05-event-output.md` §Stuck-button safeguards).
+
+**`log-events [seconds] [path]`** — Records the **raw `CGEvent` stream as the target
+application receives it**, one CSV row per event: type, whether it came from us or from
+the hardware, location, `clickState`, `pressure`, `eventNumber`, button number, and
+deltas. Runs of moves and drags collapse to first + count + last, so a 30-second session
+stays readable instead of burying the transitions under tens of thousands of move rows.
+
+This is the instrument for one specific question: **"why does our synthetic input behave
+differently from a real mouse?"** Every other logging command here works at the *gesture*
+level and none of them carry these fields, so this is the only one that can see the class
+of defect that lives in them. The method is always the same — reproduce the same gesture
+twice, once synthetically and once with a physical click, then diff the field columns
+between the two.
+
+Two properties make it safe and make it truthful. It is **listen-only**, so it cannot
+alter, drop, or delay anything; unlike `log-conflicts` it does *not* replace the running
+app, and is meant to be run alongside it. And its tap is **tail-appended to the session
+tap**, which puts it downstream of the app's own `.cghidEventTap` rewrite — so a promoted
+`mouseMoved` is already recorded as the `…MouseDragged` the target app will actually see.
+Recording upstream of that would show our intent rather than the result.
+
+*Known result:* this is what found the Pages/Numbers drag-collapse bug. A drag-terminating
+`leftMouseUp` was carrying `clickState 1` where hardware sends `0` — announcing a fresh
+click at the release point — and promoted drags were carrying stale button state inherited
+from the move stream instead of the held button's. Both were invisible to every other
+instrument in this harness. The capture also corrected the *reporter's* framing: drags
+believed to be physical turned out to be synthetic, which is what made a 100%-reproducible
+defect look intermittent (`14-post-v1.md` §Synthetic drags read as clicks).
 
 ## If something goes wrong
 
