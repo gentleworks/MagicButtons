@@ -279,6 +279,20 @@ and were consciously left for later. Kept here so they aren't lost.
   plausible way that would show up. Not free: event numbers are expected unique and
   monotonic, so a synthesized one needs thought about what it collides with.
 
+  There is now a **second, independent reason** to want this, and it is the one more
+  likely to bite us rather than a user. Stamping promoted drags with `clickState 1` /
+  `pressure 1.0` — the fix above — made them *field-identical to genuine ones*, which was
+  the point, but it also spent the only cheap way to tell the two apart in a capture. In a
+  `mb-dev log-events` file every dragged row now reads `phys` (correctly: `src` means
+  "posted by us", and a promoted drag is a hardware move we rewrote), with identical
+  clickState and pressure either way. `eventNumber` is the sole remaining discriminator —
+  a genuine drag shares its down's number, while a promoted one carries stale move-stream
+  state against a synthetic down of 0. So the field we have not fixed is currently load
+  bearing *for diagnosis*, and fixing it naively — giving our sequences a shared number —
+  would erase that too unless the scheme deliberately keeps synthetic numbers
+  distinguishable (a reserved range, say). Worth deciding on purpose rather than
+  discovering during the next investigation.
+
 ## Seams v1 deliberately leaves for the above
 
 | Future feature | v1 affordance already in place |
