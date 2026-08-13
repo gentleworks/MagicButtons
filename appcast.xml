@@ -3,6 +3,23 @@
     <channel>
         <title>MagicButtons</title>
         <item>
+            <title>1.1.4</title>
+            <pubDate>Wed, 12 Aug 2026 19:45:12 -0700</pubDate>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[- Fixed an issue with selecting text by dragging in Pages and Numbers, and likely other applications: the selection collapsed when you lifted your finger.
+]]></description>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.4-7.dmg" length="3196207" type="application/octet-stream" sparkle:edSignature="jPw1zizix/LgMapBmOi7wLlomShtYmpTCNPXaMuWCmeCEqtAVp6LFBa/2kCseb4t5I5y3yU3MHoZZBZEVkEdBw=="/>
+            <sparkle:deltas>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons7-6.delta" sparkle:deltaFrom="6" length="110066" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ph1XjPLRF2CVbMcP9ZwzzuTWzFijoOloHDRfJGWC+Z48oObt0tTnav3VOzQ6rqtFCZP6OrRVT153QdT9FOiKCg=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons7-5.delta" sparkle:deltaFrom="5" length="350062" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="QCHOdhI486WXHXVe90nXvSM4t1zOCi25cRo3m1QybJP+gUvUqPQZ5SbqKySSD8qZmxLaLLvdLGArFn6dgqygCg=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons7-4.delta" sparkle:deltaFrom="4" length="362466" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="vcHpzG+aCPCiAV64OqMA3HMEtm1Z995PaCvvgZppu3lPRTp9WGXf2nZfK/UnZxbFA8F69wb9ourWMhx6ATs7AA=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons7-3.delta" sparkle:deltaFrom="3" length="421218" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="N2BR0scejr4CMRRANKUIQRrAvcKecMOooQt+2woWszfBKCbgMQjo/lLRSMOFN918Hr7BxmY0BC139Pb/RbBfDQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons7-2.delta" sparkle:deltaFrom="2" length="425310" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="QOM2Ul5lpyxyqE5EzsXhMB37aHEl9aXUTkEKveyOjgP+SEND0F3jpitQmiQ80mk0VsaQ+MlDVkAikRJI+DhZCQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.1.3</title>
             <pubDate>Sat, 01 Aug 2026 13:47:14 -0700</pubDate>
             <sparkle:version>6</sparkle:version>
@@ -45,59 +62,6 @@ MagicButtons now reconnects to the mouse when your Mac wakes, and notices on its
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-4.delta" sparkle:deltaFrom="4" length="137270" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="WZe+P8CoTEutoOtaeKOJKnKXO2Bo73z7I9IgMTNPkDl5Kq0nCkTETF8SNm7fOv8vsmf35ZucIiNuHM4i3Rl6AA=="/>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-3.delta" sparkle:deltaFrom="3" length="253730" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="z2EShS56gM8NNvdKcNG5l8Wjb84kCWNBK/gNfaTC9bcYi+oE+bLBsRoaIyRKoD6RE6RAOIVkU1esT7oAhm1fBw=="/>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-2.delta" sparkle:deltaFrom="2" length="261458" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="1AbNdG54MHDPNrH2F+6L0twDUekXXp/cTVkA/yyCtaat/M6DNGEW0rGAFMwUjn1YAzmhkAF3SKTzQv4SVLo3AQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.1.1</title>
-            <pubDate>Fri, 17 Jul 2026 03:58:18 -0700</pubDate>
-            <sparkle:version>4</sparkle:version>
-            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[## Improved interaction between mouse clicks and tap actions
-
-Physical clicks and tap-driven actions no longer get in each other's way:
-
-- **Clicking the mouse during a tap-started drag no longer interrupts it.** Pressing the
-  shell mid-drag could previously drop what you were dragging, or start a competing
-  selection.
-- **Fixed a duplicate drag in Press-and-hold mode.** A finger resting on the shell could
-  start a drag on top of a click you made yourself.
-- Physical double- and triple-clicks keep working normally alongside tap-to-click.
-
-### If you use Press-and-hold
-
-Press-and-hold treats a resting finger as the start of a drag, so it needs the top of the
-mouse kept clear: grip it from the sides, and touch the shell only when you mean to tap or
-drag.
-
-While a resting finger has started a drag, **clicking the
-mouse won't register until you lift that finger** — so resting a finger and *then*
-double-clicking won't select a word. Starting the double-click with the shell clear works
-normally.
-
-If you'd rather rest your fingers on the mouse, use **Tap-and-a-half**
-(Settings → Advanced → Drag style), which ignores resting fingers by design.
-
-## New: record a troubleshooting log
-
-If MagicButtons misbehaves — a drag that drops, a tap that does nothing — you can now
-record what happened and attach it to a bug report.
-
-Turn on **Record a troubleshooting log** in Settings → Status, reproduce the problem, then
-turn it off and click **Reveal in Finder…** to find the log.
-
-It records only which zone of the mouse your finger touched, which gestures were
-recognized, and when. It never records text, cursor positions, or key presses — so it's
-safe to attach to a public bug report. Recording is always off when MagicButtons starts,
-and stops on its own after 30 minutes.
-
-Reports can be filed as Issues on the Codeberg project at [https://codeberg.org/gentleworks/MagicButtons/issues/new](https://codeberg.org/gentleworks/MagicButtons/issues/new).  Keep in mind this is a free volunteer
-project and response times may be long and inconsistent.
-]]></description>
-            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.1-4.dmg" length="3134577" type="application/octet-stream" sparkle:edSignature="o0vg3En4fVDPOgczfrxauHPtGz5ODkwp8i4J+DjMgzdLz9UvtrNu9W8F1p1y2g58AMR+5MRe4OUX7E9DyyHvAg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-3.delta" sparkle:deltaFrom="3" length="248318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="hTZCQLCKY/sggBmS6RPE67ueJWwKIVY7BU5Sn0E7s+b+gLp2OkJEdGiIMbGX9X3WkHhIBOrh1fa1/Wuvvs+9AQ=="/>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons4-2.delta" sparkle:deltaFrom="2" length="254734" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ee/vv17xUvEZ0ikq4UqaZFSflcyjPWYWncGn1jD9Wp+dbP7axyRLTdEH92k+7tV2APp1dbWwN/zl3e60dnr7BQ=="/>
             </sparkle:deltas>
         </item>
     </channel>
