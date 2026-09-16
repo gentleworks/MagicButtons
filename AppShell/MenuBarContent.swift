@@ -38,6 +38,13 @@ struct MenuBarContent: View {
             Button("Quit & Reopen to Finish Setup") { model.relaunch() }
         }
 
+        // The touch stream's lifecycle wedged (docs/14): no reconnection will
+        // answer, so the menu offers the one recovery that will.
+        if model.isStreamStuck {
+            Divider()
+            Button("Quit & Reopen MagicButtons") { model.relaunch() }
+        }
+
         Divider()
 
         Button("Open Visualizer") { model.showVisualizer() }

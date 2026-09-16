@@ -1175,3 +1175,110 @@ alongside a change that already had a measured justification. If a drag-correlat
 ever surfaces in an app that matches an up to its down by event number, this is the first
 thing to try. Faking it is not free: event numbers are expected to be unique and
 monotonic, so a synthesized one wants its own thought about what it collides with.
+
+## The 2026-09 main-thread hang — a three-layer fix ⏳ *(built 2026-09-15; HW verification pending)*
+
+The app reported dead on 2026-09-14 ("taps aren't working, and the item in the
+menu doesn't do anything"). It had not crashed — no crash report, the process
+was alive (launched at boot as the login item) — it had **hung**. A `sample`
+of the process put the main thread in one place in nearly every sample:
+
+```
+main → NSApp.run → run loop → IOKit callback (DeviceMonitor)
+  → AppCoordinator.refreshDevices()
+  → MultitouchSource.stop()
+  → MTDeviceStop (private MultitouchSupport.framework)
+  → usleep → nanosleep → __semwait_signal   ← parked in a kernel wait
+```
+
+`MTDeviceStop` — the private call that stops a mouse's touch sensor — has **no
+timeout contract**, and in the state it was in it entered the framework's own
+sleep loop and never returned. Everything else about the incident follows from
+that one blocked thread:
+
+- **Menu dead** — the main run loop stopped turning, so SwiftUI could neither
+  render the menu nor process a click on it.
+- **Taps dead** — the event tap's source lives on the main run loop too, so its
+  callbacks never fired; the system then disabled the unresponsive tap and
+  passed physical clicks through, which is why the mouse "worked" while every
+  gesture did nothing.
+- **Frame thread parked** — `stop()` held the registry lock across the blocking
+  stop, so the framework's frame-callback thread waited on that lock as well.
+
+**The trigger** was the 1.1.2 wake hook and the `DeviceMonitor`: both are
+fire-and-forget *main-thread* notifications ending in a synchronous, unbounded
+private-framework call. The machine's power log shows full user wakes on
+Sept 9–13, the last at 22:03 a "Wake from Deep Idle due to HID Activity" after
+a 19:22 sleep — exactly when a Bluetooth Magic Mouse drops and re-registers,
+and exactly when calling `MTDeviceStop` on a device mid reconnect spins
+forever. **Why it stayed dead for days** is a second gap: a login item
+*launches at login*; it does not *resurrect* a process that died or hung, and
+the app had no watchdog anywhere.
+
+The immediate unstick was `kill -9` + relaunch (a fresh process starts
+`MTDeviceStart` on an already-stable mouse). The fix, in three layers:
+
+1. **Never give the framework the main thread** (the actual bug). Every
+   private-framework call now runs on the source's own serial
+   `lifecycleQueue`; frame delivery moved to a separate `frameQueue` (docs/04
+   §Threading). The `TouchSource` protocol became **completion-based**
+   (`Sendable`; `start`/`stop` report through a completion that fires exactly
+   once, on an unspecified thread) and gained `refresh` (stop-then-start as
+   one queued pair). Lock discipline changed with it: registry mutations
+   happen in brief critical sections that never contain a framework call, so a
+   stuck stop can no longer park the frame thread on the lock. If
+   `MTDeviceStop` hangs, it now hangs on a background thread: the menu stays
+   live, the tap stays live, and the status pane says what's happening.
+2. **Bound it.** The coordinator tracks the source's lifecycle as a state
+   (`idle` / `live` / `reEnumerating` / `stuck`) with a generation counter, and
+   arms a main-actor timeout per (re)enumeration — **30 s**, generous on
+   purpose (a Bluetooth re-registration can legitimately take many seconds, and
+   the honest alternative was the pre-fix behavior: sit silently
+   "re-enumerating" forever). A completion that never arrives in time marks the
+   source `stuck`; a *late* completion that finally arrives clears the flag and
+   honors its outcome (the queue unblocked — the source is alive again);
+   superseded (stopped or newer-generation) completions are ignored.
+   `refreshDevices` now only issues from `.live` — a second pass queued behind
+   an outstanding one would never answer; devices an in-flight pass misses are
+   picked up by the App's 1.5 s poll self-heal once it settles. The UI turns
+   `.stuck` into "Stream stuck — Quit & Reopen" (menu status line + a
+   "Restart needed" section reusing the existing `relaunch()`), and
+   `.reEnumerating` gets a transient row of its own instead of silence.
+3. **A self-resurrection backstop.** A heartbeat — the main thread records a
+   beat every 500 ms — plus a **detached checker thread** (a bare `Thread`, not
+   a `Task` or a GCD timer: those keep moving when the *main run loop* is
+   wedged, which is precisely what this must outlive) that notices beats
+   silent past ~30 s and replaces the process: write a marker file with this
+   PID, launch a fresh instance (`/usr/bin/open -n` — a plain `open` would only
+   *activate* the wedged one), then `_exit(1)` (not `exit`, whose atexit/ObjC
+   teardown could block against the wedge). The fresh instance kills the
+   recorded PID at launch — alive **and** `proc_pidpath`-confirmed to be its own
+   executable, guarding against PID reuse — and clears the marker. The liveness
+   decision itself (`MainLoopLiveness`) is a pure, clock-free AppCore model,
+   mirroring `StreamHealthMonitor`; the App feeds it
+   `ProcessInfo.systemUptime`, which **stops while the machine sleeps** —
+   against a wall clock, one nap would read as silence and "resurrect" a
+   healthy app. With layers 1–2 this should essentially never fire; it turns
+   any *future* main-thread hang from "dead until you notice" into "restarted
+   in ~30 s". A launchd `KeepAlive` agent was the considered alternative and is
+   deliberately skipped: a second system component, when the login-item UX +
+   self-resurrection covers it.
+
+**Tests** (276 → 290): `CoordinatorStuckTests` drives a new `StuckSource` fake
+whose lifecycle calls can go silent forever — start/refresh that never
+complete are marked `stuck` after the timeout; a late completion (success or
+failure) clears the flag and honors its outcome; a superseded completion and a
+cancelled timeout clobber nothing; and no second pass is ever issued into a
+wedged source. `MainLoopLivenessTests` pins the decision model: silence past
+the threshold, no-beat-yet, steady beats, a backward clock jump, and the
+fire-once latch. `swift test` green.
+
+**HW verification — pending.** The wedge is a private-framework race against a
+device mid sleep/wake re-registration; it cannot be forced on demand, so the
+exit gate is observational: normal tap/drag/visualizer behavior unchanged; a
+sleep → wake cycle with the mouse attached re-enumerates cleanly (the 1.1.2
+wake path, now non-blocking) with the Status pane showing
+"re-enumerating" → "connected" rather than sitting; and over several days of
+normal use no resurrection marker ever appears and the process never
+replaces itself (the watchdog staying silent on a healthy app is the
+verification of layer 3 as much as anything else can be).

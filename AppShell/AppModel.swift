@@ -80,6 +80,10 @@ final class AppModel {
     @ObservationIgnored private var streamHealth = StreamHealthMonitor()
     /// The workspace wake observer, retained so `stop()` can remove it.
     @ObservationIgnored private var wakeObserver: NSObjectProtocol?
+    /// The main-loop watchdog (docs/14, layer 3): the self-resurrection
+    /// backstop — a main-thread beat every 500 ms, a detached checker thread,
+    /// and a fresh-instance relaunch when the loop goes silent past ~30 s.
+    @ObservationIgnored private let watchdog = MainLoopWatchdog()
 
     // MARK: Observable status mirror (drives the menu bar + Settings)
 
@@ -165,6 +169,9 @@ final class AppModel {
     /// enumerates the mouse without Input Monitoring, so no error is thrown; docs/08).
     /// Mirrored from `AppCoordinator.touchesNotArriving` on the status poll.
     private(set) var touchesNotArriving = false
+    /// Mirror of `AppCoordinator.sourceState` (docs/14): the UI turns `.stuck`
+    /// into "stream stuck — Quit & Reopen".
+    private(set) var sourceState: AppCoordinator.SourceState = .idle
     /// Observable mirror of the login item's real `SMAppService` status, reconciled at
     /// launch and after every toggle so the Advanced checkbox tracks System Settings →
     /// Login Items rather than only our stored preference.
@@ -175,6 +182,12 @@ final class AppModel {
     private(set) var launchAtLoginNote: String?
 
     init() {
+        // If a previous instance wedged its main loop and the watchdog
+        // resurrected this launch, its PID is in the marker — kill it (with
+        // the PID-reuse guard) before this process arms anything of its own,
+        // so the two instances never both hold input taps (docs/14).
+        WatchdogMarker.killPredecessorIfAny()
+
         let store = SettingsStore(storage: UserDefaultsStorage())
         let settings = store.load()
         self.store = store
@@ -283,6 +296,10 @@ final class AppModel {
 
     /// Start the input streams and device watch. Called once the app finishes launching.
     func start() {
+        // First, before anything that could wedge the main loop: the watchdog
+        // must be watching *from before* the first dangerous call, not after
+        // it (docs/14).
+        watchdog.start()
         coordinator.start()
         coordinator.setSecondaryClickSide(secondaryClickReader.currentSide())
         deviceMonitor.start()
@@ -349,6 +366,11 @@ final class AppModel {
         deviceMonitor.stop()
         coordinator.stop()
         mirrorStatus()
+        // Last: if stopping wedged the main loop (it shouldn't — the source's
+        // stop is issued and not awaited, docs/14), the checker thread still
+        // gets the chance to resurrect rather than leave a wedged process
+        // behind a "clean" quit.
+        watchdog.stop()
     }
 
     /// Re-read live external state — permissions **and** the login-item status — so a
@@ -405,6 +427,7 @@ final class AppModel {
     private func mirrorStatus() {
         isDeviceConnected = coordinator.isDeviceConnected
         sourceError = coordinator.sourceError
+        sourceState = coordinator.sourceState
         interceptorFailed = coordinator.interceptorFailed
         isReceivingTouches = streamHealth.isReceivingFrames(at: ProcessInfo.processInfo.systemUptime)
         // The coordinator's flag alone only says "no frame since (re)start", which an
@@ -699,10 +722,13 @@ final class AppModel {
         NSWorkspace.shared.open(permission.settingsURL)
     }
 
-    /// Quit and relaunch so an Accessibility grant made mid-session takes under a fresh
-    /// process — the reliable fallback when the in-place tap retry couldn't install
-    /// (see `needsRelaunch`). Opens a new instance of our own bundle, then terminates
-    /// this one once the launch is under way.
+    /// Quit and relaunch so a fresh process takes over. The reliable recovery for
+    /// two stuck states (docs/14): an Accessibility grant made mid-session that the
+    /// in-place tap retry couldn't apply (see `needsRelaunch`), and a touch stream
+    /// whose lifecycle wedged (`isStreamStuck`) — a wedged framework call can only
+    /// be outrun by a fresh process running a fresh enumeration. Opens a new
+    /// instance of our own bundle, then terminates this one once the launch is
+    /// under way.
     func relaunch() {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
@@ -734,10 +760,17 @@ final class AppModel {
         grantedAccessibilityWhileRunning && interceptorFailed
     }
 
+    /// The touch stream's lifecycle wedged — its (re)enumeration never came back
+    /// (docs/14). Nothing the app can send to it will answer, so the UI offers
+    /// the only recovery: a fresh launch.
+    var isStreamStuck: Bool { sourceState == .stuck }
+
     var health: Health {
         if backendUnavailable || !permissionsSnapshot.isFullyOperational { return .degraded }
         // A granted permission whose stream is still down is not "operational".
         if interceptorFailed || needsRelaunch { return .degraded }
+        // A wedged stream can't act even with every permission granted (docs/14).
+        if isStreamStuck { return .degraded }
         return isEnabled ? .operational : .disabled
     }
 
@@ -766,6 +799,12 @@ final class AppModel {
             let names = ListFormatter.localizedString(byJoining: missing.map(\.title))
             return String(localized: "Missing: \(names)",
                           comment: "Menu status line listing permissions not yet granted.")
+        }
+        // The stream's lifecycle wedged (docs/14): no reconnection will answer,
+        // so the only recovery a user can perform is a fresh launch.
+        if isStreamStuck {
+            return String(localized: "Stream stuck — Quit & Reopen",
+                          comment: "Menu status line: the touch stream's lifecycle wedged; only a relaunch recovers it (docs/14).")
         }
         if needsRelaunch {
             return String(localized: "Quit & Reopen to finish setup",
@@ -804,6 +843,17 @@ final class AppModel {
             return String(localized: "Unavailable on this macOS build",
                           comment: "Status pane, Device row: multitouch backend missing.")
         }
+        // The wedge, and the (up to 30 s) re-enumeration that may precede it
+        // (docs/14): both need their own line — a pre-fix hang sat silently
+        // "re-enumerating" for days, and a stuck stream must not read "connected".
+        if isStreamStuck {
+            return String(localized: "Magic Mouse — stream stuck",
+                          comment: "Status pane, Device row: the touch stream's lifecycle wedged (docs/14). 'Magic Mouse' is a product name — do not translate.")
+        }
+        if sourceState == .reEnumerating && isDeviceConnected {
+            return String(localized: "Magic Mouse — re-enumerating",
+                          comment: "Status pane, Device row: a (re)enumeration is in flight (docs/14). 'Magic Mouse' is a product name — do not translate.")
+        }
         if isDeviceConnected {
             return isReceivingTouches
                 ? String(localized: "Magic Mouse — connected, receiving touches",
@@ -832,6 +882,14 @@ final class AppModel {
         if backendUnavailable {
             return String(localized: "The multitouch backend didn’t load on this macOS build. An update to MagicButtons may be required.",
                           comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
+        }
+        // The lifecycle wedged (docs/14): the (re)enumeration never came back, so
+        // reconnecting can't help — only a fresh launch runs a fresh enumeration.
+        // Stated without asserting the device is connected: the wedge can land on
+        // the launch-time start, before any device was ever seen.
+        if isStreamStuck {
+            return String(localized: "The touch stream stopped responding, and reconnecting didn’t help — Quit & Reopen MagicButtons.",
+                          comment: "Status pane, Recent issue: the touch stream's lifecycle wedged (docs/14). 'MagicButtons' is the app name — do not translate.")
         }
         // Accessibility granted mid-run but the tap still won't install → a fresh
         // launch applies it (docs/07 step 3). Supersedes the generic tap message below.

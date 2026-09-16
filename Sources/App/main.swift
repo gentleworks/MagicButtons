@@ -122,6 +122,55 @@ func parseZone(_ s: String?) -> MouseZone? {
     }
 }
 
+// MARK: - Shared harness helpers
+
+/// The CLI counterpart of the app's completion handling (docs/14): request the
+/// touch source's start and wait — **bounded** — for it to settle, so a command
+/// keeps its synchronous flow. The real source runs its private-framework calls
+/// on its own lifecycle queue and reports back through a completion, so the
+/// wait parks here on the main run loop (which keeps turning — frames, IOKit
+/// notifications and the timer all still run). A *stuck* queue never answers,
+/// so the wait is capped: on timeout we report it and let the run's own
+/// deadline + frame count carry the verdict, the way the app's status pane does.
+/// `nonisolated` so the (nonisolated) run functions can call it; the body
+/// asserts main because the run loop it parks on must be the main one — every
+/// harness command runs top-level on main.
+func startSourceWaiting(_ source: some TouchSource,
+                        timeout: TimeInterval = 10) -> HarnessStartOutcome {
+    MainActor.assumeIsolated {
+        let box = LockBox<Result<Void, TouchSourceError>>()
+        source.start { box.store($0) }
+        let end = Date().addingTimeInterval(timeout)
+        while box.value == nil {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            if Date() >= end { break }
+        }
+        switch box.value {
+        case .some(.success): return .running
+        case .some(.failure(let error)): return .failed(error)
+        case nil: return .unsettled
+        }
+    }
+}
+
+enum HarnessStartOutcome {
+    case running
+    case failed(TouchSourceError)
+    /// The completion never arrived within the wait — the source's lifecycle
+    /// queue is wedged (a device mid sleep/wake re-registration, docs/14).
+    case unsettled
+}
+
+/// A lock-guarded single-slot box: the completion lands on the source's
+/// lifecycle queue and is read on main, so the hand-off needs real
+/// synchronization, not just main-actor isolation.
+final class LockBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: T?
+    func store(_ value: T) { lock.lock(); stored = value; lock.unlock() }
+    var value: T? { lock.lock(); defer { lock.unlock() }; return stored }
+}
+
 /// Phase 3 exit gate (part 1): a synthesized click must land as a real click in
 /// another app. Counts down so the operator can focus a target (e.g. TextEdit),
 /// then posts one `CGEventEmitter.click`.
@@ -202,11 +251,15 @@ func runVerifySource(secondsArg: String?) -> Int32 {
         }
     }
 
-    do {
-        try source.start()
-    } catch {
+    switch startSourceWaiting(source) {
+    case .running:
+        break
+    case .failed(let error):
         print("start failed: \(error) (usually no Magic Mouse connected).")
         return 1
+    case .unsettled:
+        print("note: start hasn't settled in 10s — the device is probably mid reconnect;")
+        print("      continuing anyway, the frame count below is the verdict (docs/14).")
     }
     print("MultitouchSource running for \(Int(seconds))s — tap the mouse in different zones.")
 
@@ -214,7 +267,7 @@ func runVerifySource(secondsArg: String?) -> Int32 {
     while Date() < deadline {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
-    source.stop()
+    source.stop {}
 
     print("done. received frames: \(source.hasReceivedFrame); distinct devices: \(seenDevices.count)")
     if !source.hasReceivedFrame {
@@ -266,11 +319,15 @@ func runVerifyTwoMouse(secondsArg: String?) -> Int32 {
         }
     }
 
-    do {
-        try source.start()
-    } catch {
+    switch startSourceWaiting(source) {
+    case .running:
+        break
+    case .failed(let error):
         print("start failed: \(error) (usually no Magic Mouse connected).")
         return 1
+    case .unsettled:
+        print("note: start hasn't settled in 10s — a mouse is probably mid reconnect;")
+        print("      continuing anyway, the summary below is the verdict (docs/14).")
     }
     print("Two-mouse check for \(Int(seconds))s. Attach BOTH Magic Mice, then touch them")
     print("**at the same time** (and try tapping both together) to exercise separation.\n")
@@ -279,7 +336,7 @@ func runVerifyTwoMouse(secondsArg: String?) -> Int32 {
     while Date() < deadline {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
-    source.stop()
+    source.stop {}
 
     print("\n── two-mouse summary ───────────────────────────────")
     print("distinct devices seen:      \(tracker.devicesSeen.count)")
@@ -461,11 +518,15 @@ func runLogGestures(secondsArg: String?, pathArg: String?) -> Int32 {
         }
     }
 
-    do {
-        try source.start()
-    } catch {
+    switch startSourceWaiting(source) {
+    case .running:
+        break
+    case .failed(let error):
         print("start failed: \(error) (usually no Magic Mouse connected).")
         return 1
+    case .unsettled:
+        print("note: start hasn't settled in 10s — the device is probably mid reconnect;")
+        print("      continuing anyway, the summary below is the verdict (docs/14).")
     }
 
     print("Logging contacts for \(Int(seconds))s → \(path)")
@@ -476,7 +537,7 @@ func runLogGestures(secondsArg: String?, pathArg: String?) -> Int32 {
     while Date() < deadline {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
-    source.stop()
+    source.stop {}
     if haveClicks { interceptor.stop() }
     recorder.reset()
 
@@ -738,12 +799,16 @@ func runProbeCadence(secondsArg: String?) -> Int32 {
         }
     }
 
-    do {
-        try source.start()
-    } catch {
+    switch startSourceWaiting(source) {
+    case .running:
+        break
+    case .failed(let error):
         print("start failed: \(error) (if no frames arrive, grant Input Monitoring to the")
         print("hosting terminal and relaunch it — though Phase 9 found frames flow without it).")
         return 1
+    case .unsettled:
+        print("note: start hasn't settled in 10s — the device is probably mid reconnect;")
+        print("      continuing anyway, the summary below is the verdict (docs/14).")
     }
 
     print("Cadence probe for \(Int(seconds))s. Do ALL of these so the worst case is captured:")
@@ -756,7 +821,7 @@ func runProbeCadence(secondsArg: String?) -> Int32 {
     while Date() < deadline {
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
-    source.stop()
+    source.stop {}
 
     let worst = max(maxFrameGap, maxContactGap)
     print("\n── cadence summary ─────────────────────────────────")

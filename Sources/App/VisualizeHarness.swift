@@ -22,36 +22,49 @@ import MultitouchAdapter
 /// zones on a main-thread timer, so `visualize sim` shows a moving dot and the
 /// active-zone highlight tracking it. Real-time (unlike `SimulatedTouchSource`,
 /// which replays synchronously), which is exactly what a live demo wants.
-@MainActor
-final class SweepSource: @MainActor TouchSource {
+///
+/// `TouchSource` is `Sendable`, so its lifecycle requirements are nonisolated
+/// — an actor-isolated class can't conform at all (Swift 6 rejects an isolated
+/// conformance of a Sendable-inheriting protocol). The coordinator that drives
+/// this is main-actor, so `start`/`stop` assert main and arm/disarm the timer
+/// in place; completions fire synchronously on the calling thread, as
+/// `SimulatedTouchSource` does. `@unchecked Sendable`: every mutable is touched
+/// on main only (the assert above).
+final class SweepSource: TouchSource, @unchecked Sendable {
     var onFrame: (([SurfaceTouch]) -> Void)?
     private var timer: Timer?
     private var t: CGFloat = 0
     private var dir: CGFloat = 1
     private let device = MouseDeviceID(raw: 0x5124)
 
-    func start() throws {
-        var first = true
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.t += self.dir * 0.006
-                if self.t >= 1 { self.t = 1; self.dir = -1 }
-                if self.t <= 0 { self.t = 0; self.dir = 1 }
-                let phase: TouchPhase = first ? .began : .moved
-                first = false
-                let touch = SurfaceTouch(
-                    deviceID: self.device, id: 1,
-                    position: CGPoint(x: self.t, y: 0.6 + 0.15 * sin(self.t * .pi * 2)),
-                    phase: phase, timestamp: Date().timeIntervalSinceReferenceDate, size: 9)
-                self.onFrame?([touch])
+    func start(completion: @escaping @Sendable (Result<Void, TouchSourceError>) -> Void) {
+        MainActor.assumeIsolated {
+            var first = true
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.t += self.dir * 0.006
+                    if self.t >= 1 { self.t = 1; self.dir = -1 }
+                    if self.t <= 0 { self.t = 0; self.dir = 1 }
+                    let phase: TouchPhase = first ? .began : .moved
+                    first = false
+                    let touch = SurfaceTouch(
+                        deviceID: self.device, id: 1,
+                        position: CGPoint(x: self.t, y: 0.6 + 0.15 * sin(self.t * .pi * 2)),
+                        phase: phase, timestamp: Date().timeIntervalSinceReferenceDate, size: 9)
+                    self.onFrame?([touch])
+                }
             }
+            completion(.success(()))
         }
     }
 
-    func stop() {
-        timer?.invalidate()
-        timer = nil
+    func stop(completion: @escaping @Sendable () -> Void) {
+        MainActor.assumeIsolated {
+            timer?.invalidate()
+            timer = nil
+            completion()
+        }
     }
 }
 

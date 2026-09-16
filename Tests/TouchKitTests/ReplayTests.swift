@@ -25,19 +25,19 @@ private func scriptedTap() -> [[SurfaceTouch]] {
 }
 
 @Suite struct ReplayTests {
-    @Test func replayDeliversEveryScriptedFrameInOrder() throws {
+    @Test func replayDeliversEveryScriptedFrameInOrder() {
         let frames = scriptedTap()
         let source = SimulatedTouchSource()
         var received: [[SurfaceTouch]] = []
         source.onFrame = { received.append($0) }
 
-        try source.start()
+        source.start { _ in }
         source.emit(frames)
 
         #expect(received == frames)
     }
 
-    @Test func emitIsInertBeforeStartAndAfterStop() throws {
+    @Test func emitIsInertBeforeStartAndAfterStop() {
         let source = SimulatedTouchSource()
         var frameCount = 0
         source.onFrame = { _ in frameCount += 1 }
@@ -45,11 +45,11 @@ private func scriptedTap() -> [[SurfaceTouch]] {
         source.emit(scriptedTap())        // not started yet
         #expect(frameCount == 0)
 
-        try source.start()
+        source.start { _ in }
         source.emit(scriptedTap())
         #expect(frameCount == 3)
 
-        source.stop()
+        source.stop { }
         source.emit(scriptedTap())        // stopped
         #expect(frameCount == 3)
     }
@@ -64,7 +64,7 @@ private func scriptedTap() -> [[SurfaceTouch]] {
         let source = SimulatedTouchSource()
         var received: [[SurfaceTouch]] = []
         source.onFrame = { received.append($0) }
-        try source.start()
+        source.start { _ in }
         source.emit(decoded)
 
         #expect(received == original.frames)

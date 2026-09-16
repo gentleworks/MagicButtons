@@ -21,6 +21,18 @@ struct StatusSettingsView: View {
                 }
             }
 
+            // The touch stream's lifecycle wedged (docs/14): nothing the app can
+            // send to it will answer, so the one recovery is a fresh launch.
+            if model.isStreamStuck {
+                Section {
+                    Button("Quit & Reopen MagicButtons") { model.relaunch() }
+                } header: {
+                    Text("Restart needed")
+                } footer: {
+                    Text("The touch stream stopped responding — a device change likely wedged it, and only a fresh launch can clear that.")
+                }
+            }
+
             Section("Device") {
                 Label(model.deviceStatus, systemImage: deviceSymbol)
                     .foregroundStyle(model.isDeviceConnected ? .primary : .secondary)
@@ -137,13 +149,24 @@ struct StatusSettingsView: View {
     }
 
     private var backendOK: Bool {
-        !model.backendUnavailable && !model.touchesNotArriving
+        !model.backendUnavailable && !model.touchesNotArriving && !model.isStreamStuck
     }
 
     private var backendText: String {
         if model.backendUnavailable {
             return String(localized: "Multitouch backend unavailable — unsupported macOS build.",
                           comment: "Status pane, Backend row: the private backend didn't load.")
+        }
+        // The wedge, and the (up to 30 s) re-enumeration that may precede it
+        // (docs/14): both need their own line — a pre-fix hang sat silently
+        // "re-enumerating" for days, and a stuck stream must not read "healthy".
+        if model.isStreamStuck {
+            return String(localized: "Touch stream stuck — relaunch needed.",
+                          comment: "Status pane, Backend row: the touch stream's lifecycle wedged (docs/14).")
+        }
+        if model.sourceState == .reEnumerating && model.isDeviceConnected {
+            return String(localized: "Re-enumerating the touch stream…",
+                          comment: "Status pane, Backend row: a (re)enumeration is in flight (docs/14).")
         }
         if !model.isDeviceConnected {
             return String(localized: "No Magic Mouse connected.",

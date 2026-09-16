@@ -20,18 +20,76 @@ final class SpyEmitter: ButtonEmitting {
 }
 
 /// A `TouchSource` whose start can be made to fail (simulating no device) and whose
-/// start/stop calls are counted.
-final class ControllableSource: TouchSource {
+/// start/stop calls are counted. Its completions fire **synchronously on the calling
+/// thread**, like `SimulatedTouchSource` (the coordinator routes same-thread
+/// completions inline, so these tests stay synchronous). `@unchecked Sendable` for
+/// the protocol's `Sendable` requirement: the fakes are used from the main actor in
+/// tests and carry no cross-thread state.
+final class ControllableSource: TouchSource, @unchecked Sendable {
     var onFrame: (([SurfaceTouch]) -> Void)?
     var startError: TouchSourceError?
     private(set) var startCount = 0
     private(set) var stopCount = 0
 
-    func start() throws {
+    func start(completion: @escaping @Sendable (Result<Void, TouchSourceError>) -> Void) {
         startCount += 1
-        if let startError { throw startError }
+        if let startError {
+            completion(.failure(startError))
+        } else {
+            completion(.success(()))
+        }
     }
-    func stop() { stopCount += 1 }
+    func stop(completion: @escaping @Sendable () -> Void) {
+        stopCount += 1
+        completion()
+    }
+}
+
+/// A `TouchSource` whose lifecycle calls can go **silent forever** — the test
+/// stand-in for the 2026-09 incident, where the private framework call blocked
+/// forever on the source's queue (docs/14). `hangsOnStart` / `hangsOnStop`
+/// select which calls hang (both by default — the plain "wedged source");
+/// un-hung calls complete synchronously on the calling thread, like
+/// `SimulatedTouchSource`, so a test can reach `.live` and then hang a
+/// refresh (the incident's exact shape: a `stop` inside the stop-then-start
+/// pair that never returns). A hanging call captures its completion so a test
+/// can release it late (the "queue finally unblocks" case) or never (the stuck
+/// case).
+final class StuckSource: TouchSource, @unchecked Sendable {
+    var onFrame: (([SurfaceTouch]) -> Void)?
+    var hangsOnStart = true
+    var hangsOnStop = true
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+    private var pendingStart: ((Result<Void, TouchSourceError>) -> Void)?
+    private var pendingStop: (() -> Void)?
+
+    func start(completion: @escaping @Sendable (Result<Void, TouchSourceError>) -> Void) {
+        startCount += 1
+        if hangsOnStart {
+            pendingStart = completion
+        } else {
+            completion(.success(()))
+        }
+    }
+    func stop(completion: @escaping @Sendable () -> Void) {
+        stopCount += 1
+        if hangsOnStop {
+            pendingStop = completion
+        } else {
+            completion()
+        }
+    }
+
+    /// Release the captured completion, as if the framework call finally returned.
+    func releaseStart(with result: Result<Void, TouchSourceError>) {
+        pendingStart?(result)
+        pendingStart = nil
+    }
+    func releaseStop() {
+        pendingStop?()
+        pendingStop = nil
+    }
 }
 
 /// A `PhysicalClickSource` whose start can be made to throw (simulating a failed tap

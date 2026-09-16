@@ -123,10 +123,24 @@ active. (A device picker / per-device settings is roadmap.)
 
 ## Threading
 
-Callbacks arrive on the framework's own thread. The adapter immediately hops each
-frame onto a **dedicated serial `DispatchQueue`** (`onFrame` is invoked there),
-keeping ordering and keeping the framework's thread free. UI marshaling to
-`@MainActor` happens further downstream, not here.
+Two dedicated serial queues, and no private-framework call on any other thread:
+
+- **Frames.** Callbacks arrive on the framework's own thread. The adapter
+  immediately hops each frame onto a **dedicated serial `DispatchQueue`**
+  (`frameQueue`; `onFrame` is invoked there), keeping ordering and keeping the
+  framework's thread free. UI marshaling to `@MainActor` happens further
+  downstream, not here.
+- **Lifecycle.** `MTDeviceCreateList` / `MTDeviceStart` / `MTDeviceStop` all run
+  on a second serial queue (`lifecycleQueue`), and the `TouchSource` API is
+  **completion-based** — `start`/`stop` report through a completion that fires
+  exactly once, on an unspecified thread. These calls have **no timeout
+  contract** and have been observed blocking forever on a device mid
+  sleep/wake re-registration (`14-post-v1.md`, 2026-09 incident); the fix is
+  that such a block can only park a background queue, never the main run loop,
+  and the caller's timeout (`AppCoordinator.reenumerationTimeout`) is what marks
+  the source *stuck* instead of waiting. Registry table mutations happen under
+  a lock whose critical sections never contain a framework call, so a stuck
+  stop can't park the frame-callback thread on the lock either.
 
 ## Sanity checks at startup
 

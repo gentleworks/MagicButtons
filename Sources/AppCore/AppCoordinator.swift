@@ -1,3 +1,4 @@
+import Foundation
 import TouchKit
 import GestureEngine
 import EventOutput
@@ -24,6 +25,32 @@ public final class AppCoordinator {
     public private(set) var settings: AppSettings
 
     // MARK: Observable status (drives the Phase 7.6 Status panel)
+
+    /// The touch source's lifecycle, as this coordinator sees it (docs/14, 2026-09
+    /// incident).
+    public enum SourceState: Equatable {
+        /// The coordinator is stopped; the source is not running.
+        case idle
+        /// The last (re)enumeration **completed**. Whether a device actually came
+        /// back is `isDeviceConnected` / `sourceError` — a completed enumeration
+        /// that found no mouse is still a healthy lifecycle.
+        case live
+        /// A (re)enumeration's completion is outstanding — stop/start in flight on
+        /// the source's own queue.
+        case reEnumerating
+        /// The in-flight (re)enumeration's completion never arrived within
+        /// `reenumerationTimeout`. The source's lifecycle is wedged: the private
+        /// `MTDeviceStop`/`MTDeviceStart` have no timeout contract and can block
+        /// forever on a device mid sleep/wake re-registration (docs/14). Nothing
+        /// sent to the source will answer; a fresh process is the only recovery
+        /// (the App's watchdog + "Quit & Reopen" prompt).
+        case stuck
+    }
+
+    /// The source's lifecycle state. `stuck` is what the UI turns into
+    /// "stream stuck — Quit & Reopen"; it is deliberately a *state*, not an
+    /// error: no `TouchSourceError` covers "the call never returned."
+    public private(set) var sourceState: SourceState = .idle
 
     /// The source + click-source are started (app active), independent of the master
     /// feature toggle.
@@ -115,15 +142,33 @@ public final class AppCoordinator {
         isRunning && isDeviceConnected && !hasReceivedFrameSinceStart
     }
 
+    /// How long a (re)enumeration's completion may be outstanding before the
+    /// source is marked `stuck`. Generous on purpose: a Bluetooth Magic Mouse
+    /// mid sleep/wake re-registration can take many seconds to enumerate, and
+    /// the honest alternative to a timeout is the pre-fix behavior — sit
+    /// silently "re-enumerating" forever (docs/14). Injectable so tests can
+    /// use fractions of a second.
+    public let reenumerationTimeout: TimeInterval
+
+    /// The in-flight (re)enumeration's generation. Completions and timeouts
+    /// carry theirs and act only while it is still current, so a superseded
+    /// (or very late) completion can't clobber newer state.
+    private var reenumerationGeneration = 0
+    /// The timeout task for the current generation, cancelled the moment the
+    /// completion arrives (or the coordinator stops).
+    private var reenumerationTimeoutTask: Task<Void, Never>?
+
     public init(
         source: any TouchSource,
         clickSource: any PhysicalClickSource,
         emitter: any ButtonEmitting,
-        settings: AppSettings = .init()
+        settings: AppSettings = .init(),
+        reenumerationTimeout: TimeInterval = 30
     ) {
         self.source = source
         self.clickSource = clickSource
         self.settings = settings
+        self.reenumerationTimeout = reenumerationTimeout
         self.pipeline = GesturePipeline(
             layout: settings.zones,
             config: settings.gestures,
@@ -162,24 +207,38 @@ public final class AppCoordinator {
     /// A missing device or a failed tap is recorded as status rather than thrown — the app
     /// stays up and degrades (docs/07). Launched disabled installs no tap: the touch source
     /// alone drives the visualizer, and the tap is armed later by `setEnabled(true)`.
+    ///
+    /// The source's start is completion-based (the real backend's framework calls have
+    /// no timeout contract — docs/14), so "started" here means *requested*; the outcome
+    /// lands in `sourceState` / `sourceError` when the completion arrives, or the
+    /// source is marked `stuck` if it never does.
     public func start() {
         guard !isRunning else { return }
         isRunning = true
-        startSource()
+        beginStart()
         installClickInterceptionIfWanted()
     }
 
     /// Stop both streams, releasing any held button first so nothing can stick
     /// (docs/05 §Press/release). Idempotent.
+    ///
+    /// The source's stop is issued and *not awaited*: on a wedged source it queues
+    /// behind the stuck framework call and never runs — which is fine, because the
+    /// only path that matters here is process exit, and exit frees the queue with
+    /// the process. Awaiting it would be the pre-fix hang wearing a different hat.
     public func stop() {
         guard isRunning else { return }
         pipeline.cancelActiveHolds()
-        source.stop()
+        reenumerationTimeoutTask?.cancel()
+        reenumerationTimeoutTask = nil
+        reenumerationGeneration += 1   // invalidate any in-flight completion
+        source.stop {}
         clickSource.stop()
         clickInterceptionInstalled = false
         isDeviceConnected = false
         hasReceivedFrameSinceStart = false
         isRunning = false
+        sourceState = .idle
     }
 
     /// Install the event tap iff it currently has a job: running and master-enabled. A tap
@@ -231,10 +290,18 @@ public final class AppCoordinator {
     /// `AppCoordinatorTests.deviceLossReleasesAnInFlightDrag` locks this in.
     public func refreshDevices() {
         guard isRunning else { return }
+        // A (re)enumeration already in flight, or a source already wedged:
+        // issuing another one would queue behind the outstanding (or stuck)
+        // work on the source's serial queue and never answer. The in-flight
+        // enumeration covers this request, and a device the in-flight pass
+        // missed is picked up by the App's 1.5 s poll self-heal once the pass
+        // settles (docs/14). While `stuck` nothing we send can help at all —
+        // the state stays for the UI's "Quit & Reopen" prompt and the
+        // watchdog.
+        guard sourceState == .live else { return }
         pipeline.cancelActiveHolds()   // device may have vanished mid-drag — lift any held button
-        source.stop()
         hasReceivedFrameSinceStart = false   // the re-enumerated device hasn't delivered a frame yet
-        startSource()
+        beginRefresh()
     }
 
     /// Retry a stream that failed to come up at launch, after the user grants its
@@ -251,18 +318,94 @@ public final class AppCoordinator {
         }
     }
 
-    private func startSource() {
-        do {
-            try source.start()
+    // MARK: Source lifecycle (completion-based, docs/14)
+
+    /// Request a fresh enumeration from a stopped source (launch). Only
+    /// reachable from `start()` while `.idle`.
+    private func beginStart() {
+        let generation = nextReenumerationGeneration()
+        sourceState = .reEnumerating
+        source.start { [weak self] result in
+            self?.routeCompletion(result, forGeneration: generation)
+        }
+        scheduleReenumerationTimeout(generation)
+    }
+
+    /// Request a stop-then-start re-enumeration of a running source. Only
+    /// reachable from `refreshDevices()` while `.live` — the source's own
+    /// serial queue runs the pair in order, so the stop always precedes the
+    /// start and a caller can never wedge between them.
+    private func beginRefresh() {
+        let generation = nextReenumerationGeneration()
+        sourceState = .reEnumerating
+        source.refresh { [weak self] result in
+            self?.routeCompletion(result, forGeneration: generation)
+        }
+        scheduleReenumerationTimeout(generation)
+    }
+
+    /// The protocol hands us the completion "on an unspecified thread." Sources
+    /// that complete synchronously (the simulated source, the test fakes) do
+    /// so on the caller's thread — main here — which is served inline; the real
+    /// source completes from its lifecycle queue, which is hopped to main. Both
+    /// land in `sourceCompleted` without ever touching coordinator state off
+    /// main. `nonisolated`: the completion fires where the source chose
+    /// (possibly a bare queue), so this hop itself can't be main-isolated.
+    nonisolated private func routeCompletion(_ result: Result<Void, TouchSourceError>, forGeneration generation: Int) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                self.sourceCompleted(generation: generation, result: result)
+            }
+        } else {
+            Task { @MainActor [weak self] in
+                self?.sourceCompleted(generation: generation, result: result)
+            }
+        }
+    }
+
+    private func sourceCompleted(generation: Int, result: Result<Void, TouchSourceError>) {
+        // A superseded generation (we stopped, or a newer pass is in flight)
+        // is stale — ignore it. A *late* completion for the generation that
+        // already timed out means the source's queue unblocked — the source is
+        // alive again, so honor the outcome and clear the stuck flag (docs/14).
+        guard generation == reenumerationGeneration,
+              sourceState == .reEnumerating || sourceState == .stuck else { return }
+        reenumerationTimeoutTask?.cancel()
+        reenumerationTimeoutTask = nil
+        switch result {
+        case .success:
             isDeviceConnected = true
             sourceError = nil
-        } catch let error as TouchSourceError {
+        case .failure(let error):
             isDeviceConnected = false
             sourceError = error
-        } catch {
-            isDeviceConnected = false
-            sourceError = .backendUnavailable
         }
+        sourceState = .live
+    }
+
+    /// Main-actor liveness guard for the in-flight (re)enumeration. Sleeping on
+    /// the main *actor* suspends without blocking the run loop — the loop keeps
+    /// turning while the source's own queue is wedged (that is the whole point
+    /// of the fix, docs/14) — so the timeout fires even in the incident's
+    /// scenario, and the status pane says "stream stuck" instead of sitting
+    /// silently "re-enumerating" for days.
+    private func scheduleReenumerationTimeout(_ generation: Int) {
+        reenumerationTimeoutTask?.cancel()
+        reenumerationTimeoutTask = Task { [weak self, timeout = reenumerationTimeout] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
+            self?.markSourceStuck(generation: generation)
+        }
+    }
+
+    private func markSourceStuck(generation: Int) {
+        guard generation == reenumerationGeneration, sourceState == .reEnumerating else { return }
+        sourceState = .stuck
+    }
+
+    private func nextReenumerationGeneration() -> Int {
+        reenumerationGeneration += 1
+        return reenumerationGeneration
     }
 
     // MARK: Configuration (live)

@@ -11,16 +11,27 @@ import TouchKit
 /// `SurfaceTouch.timestamp`, not from wall-clock delivery, so a replay produces
 /// the same result every run. Real-time playback (honoring `interval`) belongs
 /// to the visualizer/demo layer, not here.
-public final class SimulatedTouchSource: TouchSource {
+///
+/// Its lifecycle completions fire **synchronously, on the calling thread** —
+/// the simulated backend has nothing to block on. Coordinators and harnesses
+/// must therefore tolerate a completion that never hops (the real
+/// `MultitouchSource` completes from its lifecycle queue).
+public final class SimulatedTouchSource: TouchSource, @unchecked Sendable {
     public var onFrame: (([SurfaceTouch]) -> Void)?
 
     private var isRunning = false
 
     public init() {}
 
-    public func start() throws { isRunning = true }
+    public func start(completion: @escaping @Sendable (Result<Void, TouchSourceError>) -> Void) {
+        isRunning = true
+        completion(.success(()))
+    }
 
-    public func stop() { isRunning = false }
+    public func stop(completion: @escaping @Sendable () -> Void) {
+        isRunning = false
+        completion()
+    }
 
     /// Deliver each frame in order via `onFrame`. No-op until `start()` and after
     /// `stop()`, mirroring a real source that only emits while running.
