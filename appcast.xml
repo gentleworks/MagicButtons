@@ -3,6 +3,27 @@
     <channel>
         <title>MagicButtons</title>
         <item>
+            <title>1.1.5</title>
+            <pubDate>Thu, 17 Sep 2026 08:43:00 -0700</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[Fixed a rare case where MagicButtons could become completely unresponsive — the menu stopped answering and gestures did nothing — and stay that way until the app was quit. It happened when the Magic Mouse dropped and reconnected at just the wrong moment, for example while the Mac was waking from sleep: a call into the mouse's touch system could block forever, and because that call held the app's main thread, everything froze with it. Those calls now run off the main thread, so in the same situation the menu and the rest of the app keep working while the touch stream recovers on its own.
+
+If the touch stream can't recover by itself, MagicButtons tells you instead of staying silent: the menu status reads "Stream stuck — Quit & Reopen", the Status pane explains what happened, and one click on "Quit & Reopen MagicButtons" brings it back. As a backstop for any future hang, a built-in watchdog restarts the app on its own if it ever goes unresponsive for about half a minute, so a dead state can no longer persist.
+
+While the mouse is reconnecting — after the Mac sleeps and wakes, or after the mouse drops and reconnects — the Status pane briefly shows "Re-enumerating the touch stream…" instead of sitting quiet.
+]]></description>
+            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.5-8.dmg" length="3236483" type="application/octet-stream" sparkle:edSignature="C2dICstaR99v2Kdet7qN3uOchXk1xuF78kGsR+yK9bLTz0ohkJ3ONpimrakqutZjmrBsY2FSLg9mf8ORbICUDQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons8-7.delta" sparkle:deltaFrom="7" length="228310" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="3BeuN7vCdNNPjDY6SaUa4fCBw8JOj8w1IYRcxMH7o0qXpjsYi/EulN+l04CPcVL7iIUCIbaUi6t3Tr65YVyCAg=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons8-6.delta" sparkle:deltaFrom="6" length="239510" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="XtgJE9zgtT0NnIfDmJ1LUw5tEtTcTJoULZUCOiwLJ4i7pBSqlWBytGR0E//9K7PO+I23TErRc+1YoQQDikUHCA=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons8-5.delta" sparkle:deltaFrom="5" length="400398" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="6eo+WlEvxqimKjlyyXCPo+l5ZgPIy5M3A3gw75LE0IRcO06p7I3BAavvpGl1JG7+NIO+mN40fnR4hBcxOOR2Ag=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons8-4.delta" sparkle:deltaFrom="4" length="402258" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="tZHdnIm4asIk0Kl5M1819TWmBicFRDP5AlyQSGkilIKSCobf9f0Cn/IJ+PErMdeu7ULe2vMz0fu2weyag+7qDQ=="/>
+                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons8-3.delta" sparkle:deltaFrom="3" length="461958" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="o4ycIHA52vlOtICU/LsjDtfBEoyi8M30fr/BErVFzZKhiml2JpmhFnKL9ICGg3BGUVyiQbXulpdTIrqIiiuMCg=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.1.4</title>
             <pubDate>Wed, 12 Aug 2026 19:45:12 -0700</pubDate>
             <sparkle:version>7</sparkle:version>
@@ -45,23 +66,6 @@ MagicButtons has a new home at codeberg.org/gentleworks/MagicButtons. The Homepa
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-4.delta" sparkle:deltaFrom="4" length="359722" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="+NzSJW4VKqt0X0kLKOJHxL0veA5c4BVMsxiPXSj9GljueL9DlCPovsLb8xeQhRHosK/ubPswuZ0wAr6VcL7rCA=="/>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-3.delta" sparkle:deltaFrom="3" length="424990" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Aa2iIg6lm9/9Cxl8eG2drXUvmo8Y8Ur5TIUwkZyywd2LmyS4VisBFMkHISRgMxAtltfSvuujg/pzGoQIp9wmCQ=="/>
                 <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons6-2.delta" sparkle:deltaFrom="2" length="428118" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="iHfCv2GphBivt/YxyaR8p8BNOoFyKThAQp93uh136awkZXkGHlwhE9bR7fjMp+phnPRwXy/lCRKpUFUEJwxnBg=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.1.2</title>
-            <pubDate>Sat, 25 Jul 2026 22:56:37 -0700</pubDate>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[**Fixes a Magic Mouse that silently stops responding.** After a long stretch of use — typically across sleep — MagicButtons could lose its connection to the mouse's touch surface without noticing. Taps stopped working and the visualizer stopped showing your fingers, while the menu still said Active, and switching it off and on again didn't help. Only quitting and reopening did.
-
-MagicButtons now reconnects to the mouse when your Mac wakes, and notices on its own if a real click ever arrives with no fingers detected — a combination that can't happen on a working mouse — and reconnects then too. If reconnecting genuinely doesn't help, the Status pane now says so rather than suggesting a relaunch you may have already tried.
-]]></description>
-            <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons-1.1.2-5.dmg" length="3144324" type="application/octet-stream" sparkle:edSignature="x6djvnaoR4xOzvelw3b0J8WZ6rZxRc4ILUo54OEvC/btiojPi4+T4L9YLGLF02eeNlLapdrCfcgBCEu22X0ZCg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-4.delta" sparkle:deltaFrom="4" length="137270" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="WZe+P8CoTEutoOtaeKOJKnKXO2Bo73z7I9IgMTNPkDl5Kq0nCkTETF8SNm7fOv8vsmf35ZucIiNuHM4i3Rl6AA=="/>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-3.delta" sparkle:deltaFrom="3" length="253730" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="z2EShS56gM8NNvdKcNG5l8Wjb84kCWNBK/gNfaTC9bcYi+oE+bLBsRoaIyRKoD6RE6RAOIVkU1esT7oAhm1fBw=="/>
-                <enclosure url="https://gentleworks.codeberg.page/MagicButtons/MagicButtons5-2.delta" sparkle:deltaFrom="2" length="261458" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="1AbNdG54MHDPNrH2F+6L0twDUekXXp/cTVkA/yyCtaat/M6DNGEW0rGAFMwUjn1YAzmhkAF3SKTzQv4SVLo3AQ=="/>
             </sparkle:deltas>
         </item>
     </channel>
