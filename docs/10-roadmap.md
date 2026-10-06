@@ -271,27 +271,27 @@ and were consciously left for later. Kept here so they aren't lost.
   strand paths, so this stays optional unless a new strand case appears.
 - **Synthetic events carry `eventNumber` 0** — hardware gives every event in one click
   sequence a shared, incrementing number (a capture showed 2486, 2487, …); everything we
-  post carries 0. Measured, real, and **left unfixed on purpose**: it is not load-bearing
-  for the click path (synthetic single/double/triple all work), so it was not faked
-  alongside the `clickState` fix that did have a measured justification
-  (`14-post-v1.md` §Synthetic drags read as clicks). First thing to try if an app ever
-  mis-correlates a synthetic drag — matching an up to its down by event number is the
-  plausible way that would show up. Not free: event numbers are expected unique and
-  monotonic, so a synthesized one needs thought about what it collides with.
+  post carries 0. **Half-fixed (2026-10-06):** the half that bit was the *mismatch*.
+  Promoted drags kept the stale number of the last real sequence while their down carried
+  0, and macOS 27 moves a window only when a drag's number matches its down's, so
+  title-bar drags stopped working (`14-post-v1.md` §Window drags on macOS 27). Promoted
+  drags are now stamped 0, so each synthetic sequence shares one number, as hardware's do.
 
-  There is now a **second, independent reason** to want this, and it is the one more
-  likely to bite us rather than a user. Stamping promoted drags with `clickState 1` /
-  `pressure 1.0` — the fix above — made them *field-identical to genuine ones*, which was
-  the point, but it also spent the only cheap way to tell the two apart in a capture. In a
-  `mb-dev log-events` file every dragged row now reads `phys` (correctly: `src` means
-  "posted by us", and a promoted drag is a hardware move we rewrote), with identical
-  clickState and pressure either way. `eventNumber` is the sole remaining discriminator —
-  a genuine drag shares its down's number, while a promoted one carries stale move-stream
-  state against a synthetic down of 0. So the field we have not fixed is currently load
-  bearing *for diagnosis*, and fixing it naively — giving our sequences a shared number —
-  would erase that too unless the scheme deliberately keeps synthetic numbers
-  distinguishable (a reserved range, say). Worth deciding on purpose rather than
-  discovering during the next investigation.
+  What is left is that every synthetic sequence shares the *same* number, where hardware
+  numbers are unique and climb. Nothing has been measured to depend on that, and synthetic
+  single, double, and triple clicks have always worked with it. Still the first thing to
+  look at if an app mis-correlates two synthetic sequences with each other, as opposed to a
+  drag with its own down. Faking a climbing number is not free: event numbers are expected
+  unique and monotonic, so a synthesized one needs thought about what it collides with.
+
+  The fix kept the **diagnostic** use of this field, which was the risk recorded here.
+  Stamping promoted drags with `clickState 1` / `pressure 1.0` had made them
+  field-identical to genuine ones, leaving `eventNumber` the only way to tell the two
+  apart in a `mb-dev log-events` capture. It still is, and more cleanly than before. A
+  promoted drag now reads 0 like the rest of its sequence, while a genuine drag reads its
+  down's hardware number (2486 and up in the captures recorded here). Any later scheme
+  that gives synthetic sequences climbing numbers has to keep them distinguishable (a
+  reserved range, say), or this is lost.
 
 ## Seams v1 deliberately leaves for the above
 

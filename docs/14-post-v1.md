@@ -1176,6 +1176,9 @@ ever surfaces in an app that matches an up to its down by event number, this is 
 thing to try. Faking it is not free: event numbers are expected to be unique and
 monotonic, so a synthesized one wants its own thought about what it collides with.
 
+*Update 2026-10-06:* macOS 27 surfaced exactly that bug, in window moves rather than an
+app. The drag half is fixed: see §Window drags on macOS 27 below.
+
 ## The 2026-09 main-thread hang — a three-layer fix ⏳ *(built 2026-09-15; HW verification pending)*
 
 The app reported dead on 2026-09-14 ("taps aren't working, and the item in the
@@ -1282,3 +1285,64 @@ wake path, now non-blocking) with the Status pane showing
 normal use no resurrection marker ever appears and the process never
 replaces itself (the watchdog staying silent on a healthy app is the
 verification of layer 3 as much as anything else can be).
+
+## Window drags on macOS 27 — the drags belonged to no click ✅ *(done; HW-verified 2026-10-06; 292 tests)*
+
+After the upgrade to macOS 27, neither drag style could move a window by its title bar:
+the pointer travelled and the window stayed put. Every other drag tested still worked
+(text selection, scrollbars, window *resizing*), and a physical click-and-drag moved
+windows fine.
+
+### The cause was the field the last fix left alone
+
+`§Still outstanding: eventNumber` above predicted it. Hardware gives a down and every drag
+it owns one shared `eventNumber`. Our synthetic down carries **0**, but a promoted drag is a
+hardware `mouseMoved` rewritten in place, and it keeps the number of the *last real* click
+sequence. macOS 27 moves a window only when the drags' number matches their down's.
+Selection, scrollers and resizing never consult it, which is why the breakage was confined
+to window moves.
+
+### The measurement
+
+A throwaway probe (an AppKit window of its own, dragged by its title bar with posted
+events, its frame compared before and after) varied nothing but `eventNumber`. Every row
+ran at least three times, across three runs in different orders, with identical results:
+
+| down | drags | window |
+|---|---|---|
+| untouched (0) | untouched (0) | **moved** |
+| 4242 | 4242 | **moved** |
+| 0 | 4242 | did not move |
+| 4242 | 0 | did not move |
+| untouched (0) | moves retyped in place, untouched | **moved** |
+| 0 | moves retyped in place, 4242 | did not move |
+| 0 | moves retyped in place, 0 | **moved** |
+
+The rule is equality, not "drags must be zero": the mismatch fails in either direction.
+The retyped rows mirror `applyDragPromotion`, so the rewrite path behaves exactly like
+drags created natively.
+
+### The fix
+
+`applyDragPromotion` now stamps `EventInterceptor.dragEventNumber` (**0**, the number our
+down carries, since the emitter never stamps one) alongside `clickState` and `pressure`.
+The whole synthetic sequence (down, drags, up) now shares one number, as hardware does.
+
+Two tests pin it, and each was mutated to prove it bites.
+`promotedDragJoinsItsDownsClickSequence` seeds a real hardware sequence number (2486, from
+the Pages capture) and fails with the stamp removed. `holdSharesItsDragsEventNumber` asserts the emitter's down and up
+carry the same constant, and fails if the emitter starts stamping a number of its own, so
+the two sides cannot drift apart silently. `unarmedMoveKeepsItsOwnFieldsUntouched` now
+also checks that an un-armed move keeps its number.
+
+Diagnosis survives, and the discriminator gets sharper. In a `mb-dev log-events` capture a
+promoted drag now reads `eventNumber 0`, while a genuine drag reads its down's hardware
+number.
+
+**HW-verified 2026-10-06** on a dev build under macOS 27. Title-bar drags move windows
+again, and every drag re-tested still works, in all the apps and places tried, Numbers
+included (its engine correlates events itself, so it was the regression most worth
+checking). A `log-events` capture during the check shows the field doing its job. Both
+tap-drags carried `eventNumber 0` on the down, every dragged row, and the up. A physical
+drag between them carried 547 on all three. The surrounding hardware moves carried
+545–547, which is what an un-fixed promoted drag would have kept against its down's 0.

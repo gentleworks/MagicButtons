@@ -163,6 +163,20 @@ import TouchKit
         #expect(event.getDoubleValueField(.mouseEventPressure) == 1.0)
     }
 
+    /// The window-drag regression (macOS 27). A move arrives carrying the last real click
+    /// sequence's number — 2486 is a measured one — and a promoted drag must trade it for
+    /// its down's, or the window mover ignores the whole drag.
+    @Test func promotedDragJoinsItsDownsClickSequence() {
+        let interceptor = EventInterceptor()
+        interceptor.beginDragPromotion(zone: .left)
+        let event = mouseMoved()
+        event.setIntegerValueField(.mouseEventNumber, value: 2486)
+
+        #expect(interceptor.applyDragPromotion(type: .mouseMoved, event: event))
+        #expect(event.getIntegerValueField(.mouseEventNumber)
+                == EventInterceptor.dragEventNumber)
+    }
+
     /// The un-armed path must not launder the residue either: an untouched move keeps
     /// whatever it arrived with, so the assertion above can only pass via the rewrite.
     @Test func unarmedMoveKeepsItsOwnFieldsUntouched() {
@@ -170,6 +184,7 @@ import TouchKit
         let event = mouseMoved()
         event.setIntegerValueField(.mouseEventClickState, value: 3)
         event.setDoubleValueField(.mouseEventPressure, value: 0.25)
+        event.setIntegerValueField(.mouseEventNumber, value: 2486)
         // Pressure is stored as a byte, so read back what was actually kept rather than
         // what was written (0.25 → 63/255). The point is that it is *unchanged*.
         let seededPressure = event.getDoubleValueField(.mouseEventPressure)
@@ -177,6 +192,7 @@ import TouchKit
         #expect(!interceptor.applyDragPromotion(type: .mouseMoved, event: event))
         #expect(event.getIntegerValueField(.mouseEventClickState) == 3)
         #expect(event.getDoubleValueField(.mouseEventPressure) == seededPressure)
+        #expect(event.getIntegerValueField(.mouseEventNumber) == 2486)
     }
 }
 
@@ -236,6 +252,21 @@ import TouchKit
         for event in capture.events {
             #expect(event.getIntegerValueField(.eventSourceUserData)
                     == CGEventEmitter.syntheticMarker)
+        }
+    }
+
+    /// The other end of `promotedDragJoinsItsDownsClickSequence`: the down and up a hold
+    /// posts must carry the number its promoted drags are stamped with. If either side
+    /// ever starts stamping a real sequence number, this breaks before window drags do.
+    @Test func holdSharesItsDragsEventNumber() {
+        let (emitter, capture) = capturing()
+        emitter.press(.left)
+        emitter.release(.left)
+
+        #expect(capture.events.count == 2)
+        for event in capture.events {
+            #expect(event.getIntegerValueField(.mouseEventNumber)
+                    == EventInterceptor.dragEventNumber)
         }
     }
 }

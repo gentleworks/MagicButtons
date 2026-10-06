@@ -217,6 +217,13 @@ public final class EventInterceptor {
         // claims no button is down and belongs to no click sequence.
         event.setIntegerValueField(.mouseEventClickState, value: Self.dragClickState)
         event.setDoubleValueField(.mouseEventPressure, value: 1.0)
+        // The same goes for the click sequence it belongs to. Hardware gives a down and
+        // every drag it owns one shared `eventNumber`; a move carries the last real
+        // sequence's number, while our down carries 0. macOS 27 moves a window only when
+        // the drags' number matches their down's, so a promoted title-bar drag moved the
+        // pointer and left the window behind — while selection, scrollers and resizing,
+        // which never check it, kept working (docs/14 §Window drags on macOS 27).
+        event.setIntegerValueField(.mouseEventNumber, value: Self.dragEventNumber)
         return true
     }
 
@@ -224,4 +231,9 @@ public final class EventInterceptor {
     /// always opens a hold with a single-click down; if double-click-drag (docs/10)
     /// ever lands, this and that down have to move together.
     static let dragClickState: Int64 = 1
+
+    /// The event number a promoted drag reports: the one `CGEventEmitter.press`'s down
+    /// carries, which is `0` because the emitter never stamps one. The two must match or
+    /// windows won't move; `EmittedClickStateTests` pins the pair.
+    static let dragEventNumber: Int64 = 0
 }
