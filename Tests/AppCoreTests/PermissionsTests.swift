@@ -37,6 +37,20 @@ private final class FakeChecker: PermissionChecking {
         }
     }
 
+    /// macOS 27 renamed the pane, and only 27+ may see the new name (docs/14). Both
+    /// namings must exist and differ, and each instruction must send the user to the pane
+    /// its own title names.
+    @Test func paneNameFollowsTheOSAndTheInstructionNamesTheSamePane() {
+        for permission in Permission.allCases {
+            let old = permission.title(paneRenamed: false)
+            let new = permission.title(paneRenamed: true)
+            #expect(!old.isEmpty && !new.isEmpty && old != new)
+            #expect(permission.fixInstruction(paneRenamed: false).contains(old))
+            #expect(permission.fixInstruction(paneRenamed: true).contains(new))
+            #expect(permission.title == permission.title(paneRenamed: Permission.paneRenamed))
+        }
+    }
+
     @Test func grantStateLabelsAreDistinctAndPresent() {
         // The Status pane's icon speaks these instead of an SF Symbol name, so an empty
         // or shared string would leave the grant state unsaid.

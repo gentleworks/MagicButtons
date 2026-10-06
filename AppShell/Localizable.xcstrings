@@ -161,6 +161,17 @@
         }
       }
     },
+    "Couldn’t install the event tap — grant permission so clicks can post.": {
+      "comment": "Status pane, Recent issue, on macOS 27 and later: the CGEvent tap failed to install.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo instalar el interceptor de eventos. Concede el permiso para que se envíen los clics."
+          }
+        }
+      }
+    },
     "Couldn’t turn off Open at Login: %@": {
       "comment": "Error note when unregistering the login item failed.",
       "localizations": {
@@ -311,6 +322,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Corregir %@…"
+          }
+        }
+      }
+    },
+    "Grant Permission…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conceder permiso…"
           }
         }
       }
@@ -605,6 +626,49 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir al iniciar sesión"
+          }
+        }
+      }
+    },
+    "Permission granted, but clicks aren’t posting": {
+      "comment": "Menu status line on macOS 27 and later: permission is present but the event tap failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permiso concedido, pero los clics no se envían"
+          }
+        }
+      }
+    },
+    "Permission needed": {
+      "comment": "Menu status line on macOS 27 and later: a permission is not yet granted.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta un permiso"
+          }
+        }
+      }
+    },
+    "Permission was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.": {
+      "comment": "Status pane, Recent issue, on macOS 27 and later. 'MagicButtons' is the app name — do not translate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se concedió el permiso mientras MagicButtons estaba en marcha. Sal y vuelve a abrir la app para terminar de activar los clics."
+          }
+        }
+      }
+    },
+    "Permission was granted while MagicButtons was running. Relaunch so clicks start posting.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se concedió el permiso mientras MagicButtons estaba en marcha. Reinicia la app para que empiecen a enviarse los clics."
           }
         }
       }
@@ -947,6 +1011,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "El visualizador funciona; concede Accesibilidad para que se envíen los clics."
+          }
+        }
+      }
+    },
+    "The visualizer works; grant permission so clicks can post.": {
+      "comment": "Features pane header on macOS 27 and later: partial capability without the grant.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El visualizador funciona; concede el permiso para que se envíen los clics."
           }
         }
       }

@@ -17,7 +17,11 @@ struct StatusSettingsView: View {
                 } header: {
                     Text("Finish setup")
                 } footer: {
-                    Text("Accessibility was granted while MagicButtons was running. Relaunch so clicks start posting.")
+                    if Permission.paneRenamed {
+                        Text("Permission was granted while MagicButtons was running. Relaunch so clicks start posting.")
+                    } else {
+                        Text("Accessibility was granted while MagicButtons was running. Relaunch so clicks start posting.")
+                    }
                 }
             }
 

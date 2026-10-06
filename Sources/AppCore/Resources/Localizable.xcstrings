@@ -12,6 +12,17 @@
         }
       }
     },
+    "Device Control and Data Access" : {
+      "comment" : "Name of the System Settings privacy pane the app needs, on macOS 27 and later. Must match Apple's own wording for that pane.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control de dispositivos y acceso a datos"
+          }
+        }
+      }
+    },
     "Enable MagicButtons under Accessibility." : {
       "comment" : "What to do once the deep link opens System Settings. 'MagicButtons' is the app name — do not translate.",
       "localizations" : {
@@ -19,6 +30,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activa MagicButtons en Accesibilidad."
+          }
+        }
+      }
+    },
+    "Enable MagicButtons under Device Control and Data Access." : {
+      "comment" : "What to do once the deep link opens System Settings, on macOS 27 and later. The pane name must match Apple's. 'MagicButtons' is the app name — do not translate.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa MagicButtons en Control de dispositivos y acceso a datos."
           }
         }
       }

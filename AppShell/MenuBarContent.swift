@@ -21,13 +21,20 @@ struct MenuBarContent: View {
             model.isEnabled.toggle()
         }
 
-        // One "Fix …" item per missing permission (Accessibility is the only one).
+        // One grant item per missing permission (Accessibility is the only one).
         let missing = model.permissionsSnapshot.missing
         if !missing.isEmpty {
             Divider()
             ForEach(missing, id: \.self) { permission in
-                Button("Fix \(permission.title)…") {
+                Button {
                     model.requestPermission(permission)
+                } label: {
+                    // macOS 27's pane name is too long for a menu item; the Status pane names it.
+                    if Permission.paneRenamed {
+                        Text("Grant Permission…")
+                    } else {
+                        Text("Fix \(permission.title)…")
+                    }
                 }
             }
         }

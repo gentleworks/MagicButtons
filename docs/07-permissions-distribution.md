@@ -4,7 +4,7 @@
 
 | Permission | Why | API to check | Pane |
 |-----------|-----|--------------|------|
-| **Accessibility** | Post synthesized mouse buttons (`CGEvent.post`) + install the event tap for physical-click detection | `AXIsProcessTrusted` / `AXIsProcessTrustedWithOptions` | Privacy & Security → Accessibility |
+| **Accessibility** | Post synthesized mouse buttons (`CGEvent.post`) + install the event tap for physical-click detection | `AXIsProcessTrusted` / `AXIsProcessTrustedWithOptions` | Privacy & Security → Accessibility; **Device Control and Data Access** on macOS 27+ |
 
 **Accessibility is the only required grant.** Input Monitoring was **dropped in
 Phase 9** after clean-machine testing proved it doesn't gate the private
@@ -16,6 +16,13 @@ It cannot be granted programmatically. First-run flow:
 2. If missing, show an explainer and a button that deep-links to the exact pane
    (`x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility`)
    — the `request` call also registers the app in that pane so it can be toggled.
+   On macOS 27 the app makes the request but does not open the pane itself: the request
+   shows Apple's dialog on every call, and its **Open System Settings** does the
+   opening. Opening the pane as well put the dialog on top of a pane that was already
+   open. The request must stay, because of the calls measured it is the only one that
+   re-lists the app if its entry is deleted while the app runs. macOS 27 also renamed
+   the pane, so the app names it to match. macOS 14–26 are unchanged (docs/14 §macOS
+   27 permission flow).
 3. Re-check on the status poll and when the app regains focus (user returns from
    System Settings). On a mid-run grant, re-arm the event tap in place
    (`AppCoordinator.retryStream`); if it still can't install, offer **Quit & Reopen**

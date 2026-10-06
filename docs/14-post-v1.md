@@ -1346,3 +1346,93 @@ checking). A `log-events` capture during the check shows the field doing its job
 tap-drags carried `eventNumber 0` on the down, every dragged row, and the up. A physical
 drag between them carried 547 on all three. The surrounding hardware moves carried
 545–547, which is what an un-fixed promoted drag would have kept against its down's 0.
+
+## macOS 27 permission flow — a redundant dialog, and a renamed pane ✅ *(done; HW-verified 2026-10-06; 293 tests)*
+
+While switching the Accessibility grant between the dev and release builds, clicking
+**Grant…** (Status pane) or **Fix Accessibility…** (menu) opened System Settings on the
+right pane, and *then* Apple's "would like to control this computer" dialog arrived on
+top, offering to open the pane that was already open. The pane itself had also been
+renamed.
+
+### The cause: the request opened the pane, and so did we
+
+`requestPermission` made the AX request with the prompt option
+(`AXIsProcessTrustedWithOptions(prompt)`), then opened the pane by deep link. The prompt
+shows Apple's dialog, whose own **Open System Settings** button opens that same pane, so
+on macOS 27 the user got the pane and then a dialog offering to open it.
+
+### The measurement
+
+A scratch app with its own bundle ID, launched with `open -n`, made each call while
+untrusted, with the user watching the pane. The tap and `CGRequestPostEventAccess` first
+calls each started from a freshly reset entry; the AX prompt's ran on an entry the tap had
+already created. The last column is the case that decided the design: the entry deleted with
+the **−** button while the app was still running.
+
+| call | first call | later calls, same process | after deleting the entry, same process |
+|---|---|---|---|
+| failed active `CGEvent.tapCreate` (what the app does at launch, when enabled) | lists the app + dialog | silent | silent, **not** re-listed |
+| `AXIsProcessTrustedWithOptions(prompt)` (what Grant/Fix do) | dialog | dialog every time | dialog **and re-listed** |
+| `CGRequestPostEventAccess()` | lists the app + dialog | silent | silent, **not** re-listed |
+| the dialog's **Open System Settings** | lands on the right pane | | |
+
+The tap and `CGRequestPostEventAccess` ask once per running process, then go quiet: no
+dialog and no re-listing, even after the entry is deleted. That is why the first version
+of this fix, which swapped in `CGRequestPostEventAccess`, failed its hardware check. With
+the entry deleted, Grant opened a pane with nothing in it to enable, and only a relaunch
+brought the entry back. The AX prompt is the only one of the three that prompts every time
+and the only one that re-lists a deleted entry. That is the real reason the request has to
+stay. The reason recorded in Phase 7 came from **Input Monitoring** and was never measured
+for Accessibility.
+
+One earlier round does not count. The probe first lived under `/private/tmp`, which
+LaunchServices does not register (`tccutil` → OSStatus −10814). From there a failed tap
+neither listed the app nor raised the dialog, which looked like a finding and was only
+the location. Rebuilt under the repo's `build/`, the same call did both.
+
+### The fix, macOS 27 only
+
+`SystemPermissionChecker.request` keeps the AX prompt on every macOS. On macOS 27
+`requestPermission` no longer opens the pane itself: Apple's dialog appears alone, and its
+**Open System Settings** goes to the pane. That costs one click, the dialog's, and in
+return nothing is redundant and a deleted entry comes back. **Deny** opens nothing, as it
+should. The granted row's **Open Settings…** link still opens the pane directly.
+
+**macOS 14–26 keep both the prompt and the deep link.** The user has seen the same
+redundancy there to some extent, but there is no older test machine to measure on, so
+nothing was assumed about it. Revisit if it is reported against 26.
+
+### The pane's new name
+
+macOS 27 renamed Privacy & Security → Accessibility to **Device Control and Data Access**.
+That comes from the system's own strings (key `ACCESSIBILITY` in
+`SecurityPrivacyExtension.appex`'s `Localizable.loctable`; Spanish "Control de
+dispositivos y acceso a datos"), and the `Privacy_Accessibility` deep link still works.
+Apple's dialog uses the same title.
+
+`Permission.paneRenamed` (true from macOS 27) is the one switch. The pane is named only
+where the copy sends the user somewhere: the Status row's title and its "Enable
+MagicButtons under …" line. The four status and issue sentences say "permission" instead,
+the menu status line reads "Permission needed", and the menu item reads **Grant
+Permission…**. Two reasons. The new name is long for a menu. And Spanish agreement
+differs (*Accesibilidad* is feminine, *Control* masculine), so "Accesibilidad concedida"
+could not take the new name without rewording anyway. A render at the Settings window's
+460pt minimum confirmed the longer name fits the Status row on one line, English and
+Spanish, light and dark. Every macOS 14–26 string is unchanged.
+
+`paneNameFollowsTheOSAndTheInstructionNamesTheSamePane` checks that both namings exist and
+differ, and that each instruction names its own title's pane. Two mutations prove it
+bites: the 27 instruction naming the old pane, and the 27 title reverting to the old name.
+
+**HW-verified 2026-10-06** on a dev build under macOS 27, in English and in Spanish
+(`-AppleLanguages '(es)'`). With the entry off, Grant Permission… and Grant… show Apple's
+dialog alone, and its Open System Settings lands on the pane. With the entry deleted while
+the app runs, Grant brings the dialog and the entry back, the case the first version of the
+fix lost. The Status row, menu and sentences show the new wording, and switching the entry
+on clears them.
+
+The first attempt at this check was muddled by an identity detail worth keeping. The dev
+and release builds share a bundle ID but not a signature, so the one "MagicButtons" entry
+in the pane grants only whichever build registered it. Toggling it from the dev build
+changed the release build's grant.

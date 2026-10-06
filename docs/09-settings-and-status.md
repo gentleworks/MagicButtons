@@ -46,7 +46,10 @@ Shows:
 - **Permissions:** Accessibility — the only required grant (Input Monitoring was
   dropped in Phase 9, `08 §C`) — with a status (✓ granted / ✗ missing) and, when
   missing, a **Grant** button that registers the app and deep-links to the exact
-  pane plus one line of what to do.
+  pane plus one line of what to do. On macOS 27+ Apple's permission dialog opens the
+  pane instead of the app, the row uses the pane's new name, "Device Control and Data
+  Access", and the menu item reads **Grant Permission…** rather than naming the pane
+  (docs/14 §macOS 27 permission flow).
 - **Backend health:** whether the multitouch stream is delivering frames; a
   visible warning if the private-framework layout check failed on this OS
   ("unsupported macOS build") instead of silent breakage.

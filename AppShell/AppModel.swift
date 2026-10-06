@@ -710,9 +710,15 @@ final class AppModel {
     /// prompt and, crucially, registers the app in the System Settings list so it can be
     /// toggled — then open the exact pane so the user can flip it on. An immediate recheck
     /// keeps the icon/menu honest even before the poll tick.
+    ///
+    /// On macOS 27 the prompt's own "Open System Settings" does the opening: opening the
+    /// pane as well put Apple's dialog on top of a pane that was already open (docs/14
+    /// §macOS 27 permission flow). Earlier macOS keep both, unmeasured there.
     func requestPermission(_ permission: Permission) {
         systemPermissions.request(permission)
-        NSWorkspace.shared.open(permission.settingsURL)
+        if #unavailable(macOS 27) {
+            NSWorkspace.shared.open(permission.settingsURL)
+        }
         recheckPermissions()
     }
 
@@ -795,6 +801,11 @@ final class AppModel {
         }
         let missing = permissionsSnapshot.missing
         if !missing.isEmpty {
+            // macOS 27's pane name is too long for the status line; the Status pane names it.
+            if Permission.paneRenamed {
+                return String(localized: "Permission needed",
+                              comment: "Menu status line on macOS 27 and later: a permission is not yet granted.")
+            }
             // `.title` is itself localized; the names are joined then slotted in whole.
             let names = ListFormatter.localizedString(byJoining: missing.map(\.title))
             return String(localized: "Missing: \(names)",
@@ -811,8 +822,11 @@ final class AppModel {
                           comment: "Menu status line: a relaunch is needed to apply a new grant.")
         }
         if interceptorFailed {
-            return String(localized: "Accessibility granted, but clicks aren’t posting",
-                          comment: "Menu status line: permission is present but the event tap failed.")
+            return Permission.paneRenamed
+                ? String(localized: "Permission granted, but clicks aren’t posting",
+                         comment: "Menu status line on macOS 27 and later: permission is present but the event tap failed.")
+                : String(localized: "Accessibility granted, but clicks aren’t posting",
+                         comment: "Menu status line: permission is present but the event tap failed.")
         }
         if !isDeviceConnected {
             return String(localized: "No Magic Mouse detected",
@@ -869,9 +883,13 @@ final class AppModel {
     /// who has granted only some permissions understands what works and what doesn't
     /// rather than seeing silent failure (docs/07 step 4 — graceful degradation).
     var capabilitySummary: String {
-        permissionsSnapshot.canPostClicks
-            ? String(localized: "All features available.",
-                     comment: "Features pane header: every capability is working.")
+        if permissionsSnapshot.canPostClicks {
+            return String(localized: "All features available.",
+                          comment: "Features pane header: every capability is working.")
+        }
+        return Permission.paneRenamed
+            ? String(localized: "The visualizer works; grant permission so clicks can post.",
+                     comment: "Features pane header on macOS 27 and later: partial capability without the grant.")
             : String(localized: "The visualizer works; grant Accessibility so clicks can post.",
                      comment: "Features pane header: partial capability without the Accessibility grant.")
     }
@@ -894,12 +912,18 @@ final class AppModel {
         // Accessibility granted mid-run but the tap still won't install → a fresh
         // launch applies it (docs/07 step 3). Supersedes the generic tap message below.
         if needsRelaunch {
-            return String(localized: "Accessibility was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.",
-                          comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
+            return Permission.paneRenamed
+                ? String(localized: "Permission was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.",
+                         comment: "Status pane, Recent issue, on macOS 27 and later. 'MagicButtons' is the app name — do not translate.")
+                : String(localized: "Accessibility was granted while MagicButtons was running — Quit & Reopen to finish enabling clicks.",
+                         comment: "Status pane, Recent issue. 'MagicButtons' is the app name — do not translate.")
         }
         if interceptorFailed {
-            return String(localized: "Couldn’t install the event tap — grant Accessibility so clicks can post.",
-                          comment: "Status pane, Recent issue: the CGEvent tap failed to install.")
+            return Permission.paneRenamed
+                ? String(localized: "Couldn’t install the event tap — grant permission so clicks can post.",
+                         comment: "Status pane, Recent issue, on macOS 27 and later: the CGEvent tap failed to install.")
+                : String(localized: "Couldn’t install the event tap — grant Accessibility so clicks can post.",
+                         comment: "Status pane, Recent issue: the CGEvent tap failed to install.")
         }
         // Connected yet no touches arrive: the silent-failure "deaf" case that would
         // otherwise show no error at all (docs/08). Only reached once a physical click

@@ -17,13 +17,28 @@ public enum Permission: String, Sendable, CaseIterable {
 }
 
 public extension Permission {
-    /// Pane name as it reads in System Settings. Translations must match Apple's own
-    /// wording for the pane, since the copy's whole job is to send the user to it.
-    var title: String {
+    /// Whether System Settings calls this pane by its macOS 27 name. macOS 27 renamed
+    /// Privacy & Security → Accessibility to "Device Control and Data Access" (same deep
+    /// link). Every string that names the pane, or used to, switches on this, so macOS
+    /// 14–26 keep their wording exactly (docs/14 §macOS 27 permission flow).
+    static var paneRenamed: Bool {
+        if #available(macOS 27, *) { return true }
+        return false
+    }
+
+    /// Pane name as it reads in System Settings on this macOS. Translations must match
+    /// Apple's own wording for the pane, since the copy's whole job is to send the user to it.
+    var title: String { title(paneRenamed: Self.paneRenamed) }
+
+    /// `title` under a given naming, so both can be tested on any OS.
+    func title(paneRenamed: Bool) -> String {
         switch self {
         case .accessibility:
-            return String(localized: "Accessibility", bundle: #bundle,
-                          comment: "Name of the System Settings privacy pane the app needs.")
+            return paneRenamed
+                ? String(localized: "Device Control and Data Access", bundle: #bundle,
+                         comment: "Name of the System Settings privacy pane the app needs, on macOS 27 and later. Must match Apple's own wording for that pane.")
+                : String(localized: "Accessibility", bundle: #bundle,
+                         comment: "Name of the System Settings privacy pane the app needs.")
         }
     }
 
@@ -37,11 +52,17 @@ public extension Permission {
     }
 
     /// One line: *what to do* once the deep link opens the pane.
-    var fixInstruction: String {
+    var fixInstruction: String { fixInstruction(paneRenamed: Self.paneRenamed) }
+
+    /// `fixInstruction` under a given naming, so both can be tested on any OS.
+    func fixInstruction(paneRenamed: Bool) -> String {
         switch self {
         case .accessibility:
-            return String(localized: "Enable MagicButtons under Accessibility.", bundle: #bundle,
-                          comment: "What to do once the deep link opens System Settings. 'MagicButtons' is the app name — do not translate.")
+            return paneRenamed
+                ? String(localized: "Enable MagicButtons under Device Control and Data Access.", bundle: #bundle,
+                         comment: "What to do once the deep link opens System Settings, on macOS 27 and later. The pane name must match Apple's. 'MagicButtons' is the app name — do not translate.")
+                : String(localized: "Enable MagicButtons under Accessibility.", bundle: #bundle,
+                         comment: "What to do once the deep link opens System Settings. 'MagicButtons' is the app name — do not translate.")
         }
     }
 
